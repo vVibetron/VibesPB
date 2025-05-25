@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibesPB (VPB)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #1a1a1a;
+            color: #00ff00;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #gameCanvas {
+            border: 2px solid #00ff00;
+            background-color: #000;
+            border-radius: 8px;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        .game-info-container {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            max-width: 480px;
+            margin-bottom: 15px;
+        }
+        .game-info {
+            font-size: 1.2em;
+            padding: 5px 10px;
+            border: 1px solid #00ff00;
+            border-radius: 8px;
+            background-color: #111;
+            text-align: center;
+            width: 45%;
+        }
+        .message-area {
+            margin-top: 15px;
+            font-size: 1.5em;
+            text-align: center;
+            height: 30px; 
+        }
+        button {
+            background-color: #005000;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 10px 20px;
+            font-size: 1em;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+        button:hover {
+            background-color: #007000;
+            box-shadow: 0 0 8px #00ff00;
+        }
+        #logContainer {
+            width: 100%;
+            max-width: 480px; 
+            margin-top: 10px;
+        }
+        #gameLogOutput {
+            width: 100%;
+            height: 200px;
+            background-color: #222;
+            color: #00dd00; 
+            border: 1px solid #00ff00;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.8em;
+            padding: 5px;
+            box-sizing: border-box;
+            border-radius: 4px;
+            white-space: pre-wrap; 
+            overflow-y: scroll; 
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-green-400 flex flex-col items-center justify-center min-h-screen p-5">
+
+    <h1 class="text-4xl font-bold mb-5 text-center">[ VIBES PB ]</h1>
+
+    <div class="game-info-container">
+        <div id="playerScoreDisplay" class="game-info">Player: 0</div>
+        <div id="aiScoreDisplay" class="game-info">AI: 0</div>
+    </div>
+
+    <canvas id="gameCanvas" width="480" height="420"></canvas> 
+    <div id="messageArea" class="message-area"></div>
+    <button id="startButton" class="mt-4">Start/Restart (R)</button>
+    <button id="copyLogButton" class="mt-2">Copy Log & Pause</button> 
+    <div id="logContainer" style="display: none;">
+        <textarea id="gameLogOutput" readonly></textarea>
+    </div>
+
+    <script>
+        const GAME_VERSION = "v11.0";
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const playerScoreDisplay = document.getElementById('playerScoreDisplay');
+        const aiScoreDisplay = document.getElementById('aiScoreDisplay');
+        const messageArea = document.getElementById('messageArea');
+        const copyLogButton = document.getElementById('copyLogButton'); 
+        const logContainer = document.getElementById('logContainer');     
+        const gameLogOutput = document.getElementById('gameLogOutput');   
+
+        // Game constants
+        const PADDLE_BASE_HEIGHT = 8; 
+        const PADDLE_ARM_HEIGHT = 12; 
+        const PADDLE_TOTAL_HEIGHT = PADDLE_BASE_HEIGHT + PADDLE_ARM_HEIGHT;
+        const PADDLE_WIDTH = 70;  
+        const PADDLE_ARM_WIDTH = 10; 
+        const PADDLE_CATCH_SPOT_WIDTH = PADDLE_WIDTH - 2 * PADDLE_ARM_WIDTH;
+        const PADDLE_CATCH_DEPTH = PADDLE_ARM_HEIGHT; 
+
+        const BALL_RADIUS = 7;   
+        const WINNING_SCORE = 15;
+        const PLAYER_PADDLE_MOVE_SPEED = 6 * 1.08; 
+        const MAX_BALLS_PER_SIDE = 1; // Each side effectively manages one primary ball 
+        const BASE_BALL_SPEED_MAGNITUDE = 3.0; 
+        const SUPERCHARGED_SPEED_MULTIPLIER = 2;
+        const RALLY_HIT_THRESHOLD_FOR_SPEEDUP = 4; 
+        const RALLY_SPEEDUP_FACTOR = 1.05; 
+        const MAX_BALL_SPEED_COMPONENT = 9; 
+        const SPECIAL_BRICK_SPEED_BOOST_FACTOR = 1.25;
+        const SPECIAL_BRICK_BOOST_DURATION = 180; // 3 seconds at 60fps
+
+
+        // Player paddle
+        let playerPaddleX = (canvas.width - PADDLE_WIDTH) / 2;
+        const PLAYER_PADDLE_Y = canvas.height - PADDLE_TOTAL_HEIGHT - 10; 
+        let leftArrowPressed = false;
+        let rightArrowPressed = false;
+        let spacebarDown = false; // For catch/shoot priming
+        let playerWantsToCatch = false; 
+        let playerHeldBall = null;
+
+        // AI paddle
+        let aiPaddleX = (canvas.width - PADDLE_WIDTH) / 2;
+        const AI_PADDLE_Y = 10; 
+        let aiTargetX = aiPaddleX; 
+        const AI_SMOOTHING_FACTOR = 0.08; 
+        const AI_PREDICTION_FRAMES_SIMPLE = 8; // Increased prediction
+        const AI_PADDLE_SPEED = 3.0; // Slightly faster AI
+        let aiWantsToCatch = false;
+        let aiHeldBall = null;
+        const AI_CATCH_CHANCE = 0.35; // Slightly higher chance
+        const AI_SHOOT_DELAY_FRAMES = 40; 
+        let aiShootTimer = 0;
+
+        let playerBalls = []; 
+        let aiBalls = [];     
+        
+        const BRICK_ROW_COUNT = 4; 
+        const BRICK_COLUMN_COUNT = 7;
+        const BRICK_WIDTH = 55;
+        const BRICK_HEIGHT = 15;
+        const BRICK_PADDING = 5;
+        let brickOffsetTop; 
+        const BRICK_OFFSET_LEFT = 30;
+        
+        const BRICK_COLORS = ["#D32F2F", "#F57C00", "#FBC02D", "#388E3C"];
+        const SPECIAL_BRICK_COLOR = "#673AB7"; 
+
+        let bricks = [];
+        let playerScore = 0;
+        let aiScore = 0;
+        let gameRunning = false;
+        let gamePaused = false; 
+        let animationFrameId;
+        let gameLogHistory = []; 
+        let gameStartTime = 0; 
+        let lastFrameTime = 0;
+        let frameCountForDeltaLog = 0;
+        let totalFramesRendered = 0;
+        let lastPlayerPaddleXLog = playerPaddleX; // For logging paddle move changes
+        let lastAiPaddleXLog = aiPaddleX;
+
+        const brickPatterns = [
+            { name: "Full Wall", layout: null },
+            { name: "Pyramid", layout: [
+                [0,0,0,1,0,0,0], [0,0,1,1,1,0,0], [0,1,1,1,1,1,0], [1,1,1,1,1,1,1] ]},
+            { name: "Alternating Columns", layout: [
+                [1,0,1,0,1,0,1], [1,0,1,0,1,0,1], [1,0,1,0,1,0,1], [1,0,1,0,1,0,1] ]},
+            { name: "Hollow Center", layout: [
+                [1,1,1,1,1,1,1], [1,0,0,0,0,0,1], [1,0,0,0,0,0,1], [1,1,1,1,1,1,1] ]},
+            { name: "Sparse", layout: [
+                [1,0,0,1,0,0,1], [0,1,0,0,0,1,0], [0,0,1,0,1,0,0], [1,0,0,1,0,0,1] ]},
+            { name: "Double Line", layout: [
+                [1,1,1,1,1,1,1], [0,0,0,0,0,0,0], [0,0,0,0,0,0,0], [1,1,1,1,1,1,1] ]}
+        ];
+        let currentBrickPatternName = "Full Wall";
+
+        function logGameData(message, data = {}) {
+            const timestamp = new Date().toLocaleTimeString();
+            const roundedData = {};
+            for (const key in data) {
+                const value = data[key];
+                if (typeof value === 'number') {
+                    roundedData[key] = parseFloat(value.toFixed(2));
+                } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    roundedData[key] = {}; // Initialize if not already an object
+                    for (const subKey in value) {
+                        if (typeof value[subKey] === 'number') {
+                            roundedData[key][subKey] = parseFloat(value[subKey].toFixed(2));
+                        } else {
+                            roundedData[key][subKey] = value[subKey];
+                        }
+                    }
+                } else { 
+                    roundedData[key] = value;
+                }
+            }
+            const logEntry = `[VPB ${GAME_VERSION} LOG - ${timestamp}] ${message} ${Object.keys(roundedData).length > 0 ? JSON.stringify(roundedData) : ''}`;
+            console.log(logEntry); 
+            gameLogHistory.push(logEntry);
+            if (logContainer.style.display !== 'none') { 
+                gameLogOutput.value = gameLogHistory.join('\n');
+                gameLogOutput.scrollTop = gameLogOutput.scrollHeight;
+            }
+        }
+
+        copyLogButton.addEventListener('click', () => {
+            const wasPausedByButton = copyLogButton.textContent.includes("Resume");
+            
+            if (gameRunning && !gamePaused) { // If game is running and not paused by other means
+                gamePaused = true;
+                logGameData("Game Paused (Copy Log Button Action)");
+                displayMessage("Log Copied! Game Paused.");
+                copyLogButton.textContent = 'Hide Log & Resume';
+            } else if (gamePaused && wasPausedByButton) { // Resuming game
+                gamePaused = false;
+                logContainer.style.display = 'none';
+                copyLogButton.textContent = 'Copy Log & Pause';
+                displayMessage(""); 
+                logGameData("Game Resumed (Log Button Action)");
+                lastFrameTime = Date.now(); // Reset for deltaTime calculation
+                animationFrameId = requestAnimationFrame(gameLoop);
+                return; // Skip copy logic on resume
+            } else if (gamePaused && !wasPausedByButton) { // Paused by S, just copy and show
+                 displayMessage("PAUSED - Log Copied");
+                 copyLogButton.textContent = 'Hide Log & Resume'; // Allow this button to resume if space paused
+            }
+
+
+            gameLogOutput.value = gameLogHistory.join('\n');
+            logContainer.style.display = 'block';
+            gameLogOutput.select();
+            gameLogOutput.setSelectionRange(0, gameLogOutput.value.length); 
+            try {
+                const successful = document.execCommand('copy');
+                if (!successful) { // Fallback for if execCommand fails (e.g. in some iframe contexts)
+                     navigator.clipboard.writeText(gameLogOutput.value).then(() => {
+                        logGameData("Log Copied to Clipboard (Fallback)!");
+                     }).catch(err => {
+                        logGameData("Copying failed (Fallback)", { error: err.message });
+                        displayMessage('Copying failed. Please copy manually.');
+                     });
+                } else {
+                    logGameData("Log Copied to Clipboard!");
+                }
+                if (!gamePaused) { // If it wasn't paused before, ensure message is correct
+                    displayMessage("Log Copied!"); // If game was already over or not started
+                }
+
+            } catch (err) {
+                displayMessage('Error copying. Game Paused.');
+                logGameData("Error copying log", { error: err.message });
+            }
+             if (!gameRunning || playerScore >= WINNING_SCORE || aiScore >= WINNING_SCORE) {
+                copyLogButton.textContent = 'Copy Final Log'; 
+                gamePaused = false; 
+            }
+        });
+
+
+        function calculateBrickOffsetTop() {
+            const totalBrickWallHeight = BRICK_ROW_COUNT * (BRICK_HEIGHT + BRICK_PADDING) - BRICK_PADDING;
+            brickOffsetTop = (canvas.height - totalBrickWallHeight) / 2;
+        }
+
+        function initBricks() {
+            calculateBrickOffsetTop();
+            bricks = [];
+            let activeBrickCount = 0;
+            const patternIndex = Math.floor(Math.random() * brickPatterns.length);
+            const selectedPattern = brickPatterns[patternIndex];
+            currentBrickPatternName = selectedPattern.name;
+            
+            let specialBricksToPlace = Math.floor(BRICK_ROW_COUNT * BRICK_COLUMN_COUNT * 0.1); // ~10% special bricks
+
+            for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                bricks[c] = [];
+                for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                    let status = 1;
+                    if (selectedPattern.layout) {
+                        status = selectedPattern.layout[r] && selectedPattern.layout[r][c] ? 1 : 0;
+                    }
+                    
+                    let isSpecial = false;
+                    let brickColor = BRICK_COLORS[r % BRICK_COLORS.length];
+
+                    if (status === 1 && specialBricksToPlace > 0 && Math.random() < 0.25) { // Chance for active brick
+                        isSpecial = true;
+                        brickColor = SPECIAL_BRICK_COLOR;
+                        specialBricksToPlace--;
+                    }
+
+                    bricks[c][r] = { 
+                        x: (c * (BRICK_WIDTH + BRICK_PADDING)) + BRICK_OFFSET_LEFT, 
+                        y: (r * (BRICK_HEIGHT + BRICK_PADDING)) + brickOffsetTop, 
+                        status: status, 
+                        color: brickColor, 
+                        isSpecial: isSpecial,
+                        type: isSpecial ? 'speed_boost' : 'normal',
+                        col: c, 
+                        row: r 
+                    };
+                    if (status === 1) activeBrickCount++;
+                }
+            }
+            logGameData("Bricks Initialized", { pattern: currentBrickPatternName, activeBrickCount, specialBricksTarget: Math.floor(BRICK_ROW_COUNT * BRICK_COLUMN_COUNT * 0.1) });
+        }
+        
+        function launchBall(ball, type, isSupercharged = false) {
+            const paddleX = (type === 'player') ? playerPaddleX : aiPaddleX;
+            const paddleY = (type === 'player') ? PLAYER_PADDLE_Y : AI_PADDLE_Y;
+
+            ball.x = paddleX + PADDLE_WIDTH / 2;
+            ball.isSupercharged = isSupercharged;
+            ball.rallyHitCount = 0;
+            ball.isBoosted = false; // Reset boost status
+            ball.speedBoostTimer = 0; 
+
+            const speedMagnitude = isSupercharged ? BASE_BALL_SPEED_MAGNITUDE * SUPERCHARGED_SPEED_MULTIPLIER : BASE_BALL_SPEED_MAGNITUDE;
+            
+            // Ensure speeds are not too flat
+            let initialSpeedX = (Math.random() * 2 + speedMagnitude -1) * (Math.random() > 0.5 ? 1 : -1);
+            let initialSpeedY = (Math.random() * 1 + speedMagnitude -0.5);
+
+            if (Math.abs(initialSpeedX) < 1.5) initialSpeedX = (initialSpeedX > 0 ? 1 : -1) * 1.5;
+            if (Math.abs(initialSpeedY) < 1.5) initialSpeedY = (initialSpeedY > 0 ? 1 : -1) * 1.5;
+
+
+            if (type === 'player') {
+                ball.y = paddleY + PADDLE_ARM_HEIGHT - BALL_RADIUS - 2; // Launch from inside U
+                ball.speedX = initialSpeedX * (isSupercharged ? SUPERCHARGED_SPEED_MULTIPLIER : 1);
+                ball.speedY = -initialSpeedY * (isSupercharged ? SUPERCHARGED_SPEED_MULTIPLIER : 1);
+            } else { // AI
+                ball.y = paddleY + PADDLE_BASE_HEIGHT + BALL_RADIUS + 2; // Launch from inside U
+                ball.speedX = initialSpeedX * (isSupercharged ? SUPERCHARGED_SPEED_MULTIPLIER : 1);
+                ball.speedY = initialSpeedY * (isSupercharged ? SUPERCHARGED_SPEED_MULTIPLIER : 1);
+            }
+             logGameData(`${type.toUpperCase()} Ball Launched`, { 
+                supercharged: isSupercharged, 
+                pos: {x: ball.x, y: ball.y}, 
+                speed: {x: ball.speedX, y: ball.speedY},
+                heldBallRef: type === 'player' ? playerHeldBall : aiHeldBall // Log if it was from a held state
+            });
+        }
+
+        function spawnNewBall(type, reason = "initial") {
+            const ballArray = (type === 'player') ? playerBalls : aiBalls;
+            if (ballArray.length >= MAX_BALLS_PER_SIDE) return; 
+
+            if (type === 'player' && playerHeldBall) return;
+            if (type === 'ai' && aiHeldBall) return;
+
+            let newBall = {};
+            launchBall(newBall, type, false); 
+            ballArray.push(newBall);
+
+            logGameData(`${type.toUpperCase()} ball SPARKED (Total Active: ${ballArray.length})`, { 
+                reason: reason,
+                newBallPos: {x: newBall.x, y: newBall.y},
+                newBallSpeed: {x: newBall.speedX, y: newBall.speedY}
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+             if (!gameRunning && key !== 'r' && key !== ' ') { 
+                 if (startButton && key !== 's') return; 
+            }
+
+            if (key === 'arrowleft' || key === 'a') {
+                if (!leftArrowPressed) logGameData("Input: Left Arrow Down");
+                leftArrowPressed = true;
+            } else if (key === 'arrowright' || key === 'd') {
+                if (!rightArrowPressed) logGameData("Input: Right Arrow Down");
+                rightArrowPressed = true;
+            } else if (key === ' ') { 
+                e.preventDefault(); 
+                if (!spacebarDown) logGameData("Input: Spacebar Down (Catch/Shoot)");
+                spacebarDown = true;
+
+                if (gameRunning && !gamePaused) { 
+                    if (playerHeldBall) { 
+                        logGameData("Player Action: Shoots Supercharged Ball");
+                        launchBall(playerHeldBall, 'player', true); 
+                        playerBalls.push(playerHeldBall);
+                        playerHeldBall = null;
+                        // playerWantsToCatch = false; // Not needed if spacebarDown handles it
+                    } else { 
+                        playerWantsToCatch = true; 
+                        // LogGameData for priming catch is better handled when catch check occurs
+                    }
+                } else if (!gameRunning || playerScore >= WINNING_SCORE || aiScore >= WINNING_SCORE) {
+                    // Space no longer starts game
+                }
+            } else if (key === 's') { 
+                 e.preventDefault();
+                 if (gameRunning && (playerScore < WINNING_SCORE && aiScore < WINNING_SCORE)) { 
+                    gamePaused = !gamePaused;
+                    if (gamePaused) {
+                        displayMessage("PAUSED ('S' to Resume)");
+                        logGameData("Game Paused ('S' key)");
+                        copyLogButton.textContent = 'Hide Log & Resume'; 
+                    } else {
+                        displayMessage(""); 
+                        logGameData("Game Resumed ('S' key)");
+                        copyLogButton.textContent = 'Copy Log & Pause'; 
+                        lastFrameTime = Date.now(); 
+                        animationFrameId = requestAnimationFrame(gameLoop); 
+                    }
+                }
+            } else if (key === 'r') { 
+                e.preventDefault();
+                logGameData("Input: 'R' Key Pressed - Restarting/Starting Game");
+                startGame();
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'arrowleft' || key === 'a') {
+                if (leftArrowPressed) logGameData("Input: Left Arrow Up");
+                leftArrowPressed = false;
+            } else if (key === 'arrowright' || key === 'd') {
+                if (rightArrowPressed) logGameData("Input: Right Arrow Up");
+                rightArrowPressed = false;
+            } else if (key === ' ') { // Spacebar released
+                if (spacebarDown) logGameData("Input: Spacebar Up");
+                spacebarDown = false;
+                playerWantsToCatch = false; // Reset catch prime on release
+            }
+        });
+
+        startButton.addEventListener('click', () => {
+            logGameData("Start/Restart Button Clicked");
+            startGame();
+        });
+
+        function drawPaddle(x, y, color, type) {
+            ctx.fillStyle = color;
+            const baseH = PADDLE_BASE_HEIGHT;
+            const armH = PADDLE_ARM_HEIGHT;
+            const armW = PADDLE_ARM_WIDTH;
+            const totalH = baseH + armH;
+
+            ctx.beginPath();
+            if (type === 'player') { // U opens upwards, arms are on top
+                ctx.moveTo(x, y + totalH); // Bottom-left of base
+                ctx.lineTo(x + PADDLE_WIDTH, y + totalH); // Bottom-right of base
+                ctx.lineTo(x + PADDLE_WIDTH, y + armH); // Top-right of base / bottom-right of arm
+                ctx.lineTo(x + PADDLE_WIDTH - armW, y + armH); // Inner top-right of base
+                ctx.lineTo(x + PADDLE_WIDTH - armW, y); // Top-right of arm
+                ctx.lineTo(x + armW, y); // Top-left of arm
+                ctx.lineTo(x + armW, y + armH); // Inner top-left of base
+                ctx.lineTo(x, y + armH); // Top-left of base / bottom-left of arm
+            } else { // AI - U opens downwards, arms are at bottom
+                ctx.moveTo(x, y); // Top-left of base
+                ctx.lineTo(x + PADDLE_WIDTH, y); // Top-right of base
+                ctx.lineTo(x + PADDLE_WIDTH, y + baseH); // Bottom-right of base / top-right of arm
+                ctx.lineTo(x + PADDLE_WIDTH - armW, y + baseH); // Inner bottom-right of base
+                ctx.lineTo(x + PADDLE_WIDTH - armW, y + totalH); // Bottom-right of arm
+                ctx.lineTo(x + armW, y + totalH); // Bottom-left of arm
+                ctx.lineTo(x + armW, y + baseH); // Inner bottom-left of base
+                ctx.lineTo(x, y + baseH); // Bottom-left of base / top-left of arm
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+
+
+        function drawBall(ball) {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+            let ballColor = ball.isPlayerOriginBall ? '#FFF' : '#FFD700'; // White for player, Gold for AI
+            if (ball.isSupercharged) ballColor = '#FF6347'; // Tomato Red for supercharged
+            else if (ball.isBoosted) ballColor = '#1E90FF'; // Dodger Blue for speed boosted
+            ctx.fillStyle = ballColor;
+            ctx.fill();
+            ctx.closePath();
+            
+            if (ball.isSupercharged) { 
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, BALL_RADIUS + 3, 0, Math.PI * 2);
+                ctx.strokeStyle = '#FF4500'; // OrangeRed aura
+                ctx.lineWidth = 1.5;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            } else if (ball.isBoosted) {
+                 ctx.beginPath();
+                ctx.arc(ball.x, ball.y, BALL_RADIUS + 2, 0, Math.PI * 2);
+                ctx.strokeStyle = '#87CEFA'; // LightSkyBlue aura
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.5;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function drawBricks() {
+            for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                    if (bricks[c][r].status === 1) {
+                        ctx.beginPath();
+                        ctx.rect(bricks[c][r].x, bricks[c][r].y, BRICK_WIDTH, BRICK_HEIGHT);
+                        ctx.fillStyle = bricks[c][r].color; 
+                        ctx.fill();
+                        if (bricks[c][r].isSpecial) { // Visual cue for special bricks
+                            ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+                            ctx.font = '10px "Courier New"';
+                            ctx.textAlign = 'center';
+                            ctx.fillText("S", bricks[c][r].x + BRICK_WIDTH/2, bricks[c][r].y + BRICK_HEIGHT/2 + 4);
+                        }
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function updatePlayerPaddle() {
+            const oldX = playerPaddleX;
+            if (leftArrowPressed && playerPaddleX > 0) {
+                playerPaddleX -= PLAYER_PADDLE_MOVE_SPEED;
+            }
+            if (rightArrowPressed && playerPaddleX + PADDLE_WIDTH < canvas.width) {
+                playerPaddleX += PLAYER_PADDLE_MOVE_SPEED;
+            }
+            if (playerPaddleX < 0) playerPaddleX = 0;
+            if (playerPaddleX + PADDLE_WIDTH > canvas.width) playerPaddleX = canvas.width - PADDLE_WIDTH;
+            
+            if (Math.abs(oldX - playerPaddleX) > 0.1) { 
+                logGameData("Player Paddle Moved", { newX: playerPaddleX, oldX: oldX, dx: playerPaddleX - oldX});
+            }
+            if (playerHeldBall) {
+                playerHeldBall.x = playerPaddleX + PADDLE_WIDTH / 2;
+                playerHeldBall.y = PLAYER_PADDLE_Y + PADDLE_ARM_HEIGHT + PADDLE_BASE_HEIGHT / 2; 
+                playerHeldBall.speedX = 0; playerHeldBall.speedY = 0; 
+            }
+        }
+
+        function updateAiPaddle() {
+            const oldX = aiPaddleX;
+            let targetBallToTrack = null;
+            // AI prioritizes its own ball, then player's ball if it's a threat or an opportunity
+            if (aiHeldBall) {
+                // AI logic for holding/aiming before shoot
+            } else if (aiBalls.length > 0 && aiBalls[0]) { 
+                targetBallToTrack = aiBalls[0];
+            } else if (playerBalls.length > 0 && playerBalls[0] && playerBalls[0].y < canvas.height * 0.55) { // Player ball in AI half
+                targetBallToTrack = playerBalls[0];
+            }
+
+            if (targetBallToTrack) {
+                const anticipatedBallX = targetBallToTrack.x + targetBallToTrack.speedX * AI_PREDICTION_FRAMES_SIMPLE;
+                let desiredPaddleCenterX = anticipatedBallX;
+                const randomOffset = (Math.random() - 0.5) * (PADDLE_WIDTH * 0.2); // +/- 10% error
+                desiredPaddleCenterX += randomOffset;
+                
+                aiTargetX = aiTargetX * (1 - AI_SMOOTHING_FACTOR) + (desiredPaddleCenterX - PADDLE_WIDTH / 2) * AI_SMOOTHING_FACTOR;
+
+                if (aiPaddleX < aiTargetX) {
+                    aiPaddleX += Math.min(AI_PADDLE_SPEED, aiTargetX - aiPaddleX);
+                } else if (aiPaddleX > aiTargetX) {
+                    aiPaddleX -= Math.min(AI_PADDLE_SPEED, aiPaddleX - aiTargetX);
+                }
+            }
+            
+            if (aiPaddleX < 0) aiPaddleX = 0;
+            if (aiPaddleX + PADDLE_WIDTH > canvas.width) aiPaddleX = canvas.width - PADDLE_WIDTH;
+            
+            if (Math.abs(oldX - aiPaddleX) > 0.1) {
+                 logGameData("AI Paddle Moved", { newX: aiPaddleX, oldX: oldX, trackingBallX: targetBallToTrack ? targetBallToTrack.x : null, aiTargetCalcX: aiTargetX + PADDLE_WIDTH/2, dx: aiPaddleX - oldX });
+            }
+
+            // AI Catch Logic attempt
+            if (!aiHeldBall && aiBalls.length > 0 && aiBalls[0]) {
+                const ball = aiBalls[0];
+                const paddleCenterX = aiPaddleX + PADDLE_WIDTH / 2;
+                const inCatchZoneX = Math.abs(ball.x - paddleCenterX) < PADDLE_CATCH_SPOT_WIDTH * 0.35; // Tighter for AI catch
+                const approachingCorrectly = ball.speedY < 0 && ball.y < AI_PADDLE_Y + PADDLE_TOTAL_HEIGHT + BALL_RADIUS * 5 && ball.y > AI_PADDLE_Y;
+
+                if (approachingCorrectly && inCatchZoneX && Math.random() < AI_CATCH_CHANCE) {
+                    aiWantsToCatch = true; 
+                    logGameData("AI Decides to Attempt Catch", {ballPos: {x:ball.x, y:ball.y}, paddleX: aiPaddleX, ballSpeedY: ball.speedY});
+                }
+            }
+            // AI Shoot Logic
+            if (aiHeldBall) {
+                aiHeldBall.x = aiPaddleX + PADDLE_WIDTH / 2;
+                aiHeldBall.y = AI_PADDLE_Y + PADDLE_ARM_HEIGHT / 2; 
+                aiHeldBall.speedX = 0; aiHeldBall.speedY = 0;
+                aiShootTimer--;
+                if (aiShootTimer <= 0) {
+                    logGameData("AI Shooting Caught Ball", { paddleX: aiPaddleX });
+                    launchBall(aiHeldBall, 'ai', true); 
+                    aiBalls.push(aiHeldBall);
+                    aiHeldBall = null;
+                }
+            }
+        }
+        
+        function handleBallBrickCollision(ball, isPlayerOriginBall) {
+            if (!ball) return; 
+            for (let c = 0; c < BRICK_COLUMN_COUNT; c++) {
+                for (let r = 0; r < BRICK_ROW_COUNT; r++) {
+                    let b = bricks[c][r];
+                    if (b.status === 1) {
+                        if (ball.x + BALL_RADIUS > b.x && ball.x - BALL_RADIUS < b.x + BRICK_WIDTH &&
+                            ball.y + BALL_RADIUS > b.y && ball.y - BALL_RADIUS < b.y + BRICK_HEIGHT) {
+                            
+                            const oldBallSpeed = {x: ball.speedX, y: ball.speedY};
+                            const impactPos = {x: ball.x, y: ball.y}; 
+                            
+                            if (ball.isSupercharged) { 
+                                b.status = 0;
+                                logGameData("Supercharged Brick Break", {by: (isPlayerOriginBall ? 'Player' : 'AI'), brick: {c:b.col, r:b.row, color: b.color, type:b.type}, ballImpactPos: impactPos});
+                            } else {
+                                const overlapX = (ball.x < b.x + BRICK_WIDTH/2) ? (ball.x + BALL_RADIUS - b.x) : (b.x + BRICK_WIDTH - (ball.x - BALL_RADIUS));
+                                const overlapY = (ball.y < b.y + BRICK_HEIGHT/2) ? (ball.y + BALL_RADIUS - b.y) : (b.y + BRICK_HEIGHT - (ball.y - BALL_RADIUS));
+                                if (overlapX < overlapY) { 
+                                    ball.speedX = -ball.speedX;
+                                } else { 
+                                    ball.speedY = -ball.speedY;
+                                }
+                                b.status = 0;
+                                logGameData("Brick Broken", { 
+                                    by: (isPlayerOriginBall ? 'Player' : 'AI'), 
+                                    brick: {c: b.col, r: b.row, color: b.color, type: b.type},
+                                    ballImpactPos: impactPos,
+                                    oldBallSpeed: oldBallSpeed,
+                                    newBallSpeed: {x: ball.speedX, y: ball.speedY}
+                                });
+                                if (b.isSpecial && b.type === 'speed_boost') {
+                                    ball.isBoosted = true;
+                                    ball.speedBoostTimer = SPECIAL_BRICK_BOOST_DURATION; 
+                                    ball.speedX = Math.min(MAX_BALL_SPEED_COMPONENT, Math.max(-MAX_BALL_SPEED_COMPONENT, ball.speedX * SPECIAL_BRICK_SPEED_BOOST_FACTOR));
+                                    ball.speedY = Math.min(MAX_BALL_SPEED_COMPONENT, Math.max(-MAX_BALL_SPEED_COMPONENT, ball.speedY * SPECIAL_BRICK_SPEED_BOOST_FACTOR));
+                                    logGameData("Special Brick Hit: Ball Speed Boost Activated!", {ballOwner: (isPlayerOriginBall ? 'Player' : 'AI'), newSpeed: {x: ball.speedX, y: ball.speedY}});
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateAndProcessBallArray(ballArray, isPlayerOriginBalls) {
+            for (let i = ballArray.length - 1; i >= 0; i--) { 
+                let ball = ballArray[i];
+                if (!ball) continue; 
+                
+                const oldBallPos = {x: ball.x, y: ball.y}; 
+                const oldBallSpeed = {x: ball.speedX, y: ball.speedY}; 
+
+                if (ball.isBoosted && ball.speedBoostTimer > 0) {
+                    ball.speedBoostTimer--;
+                    if (ball.speedBoostTimer <= 0) {
+                        ball.isBoosted = false;
+                        ball.speedX /= SPECIAL_BRICK_SPEED_BOOST_FACTOR; 
+                        ball.speedY /= SPECIAL_BRICK_SPEED_BOOST_FACTOR;
+                        logGameData("Ball Speed Boost Ended", {ballOwner: (isPlayerOriginBalls ? 'Player' : 'AI'), revertedSpeed: {x: ball.speedX, y:ball.speedY}});
+                    }
+                }
+
+                handleBallBrickCollision(ball, isPlayerOriginBalls);
+
+                if (ball.x + ball.speedX > canvas.width - BALL_RADIUS || ball.x + ball.speedX < BALL_RADIUS) {
+                    ball.speedX = -ball.speedX;
+                    logGameData("Side Wall Hit", { 
+                        ballOwner: (isPlayerOriginBalls ? 'Player' : 'AI'), 
+                        ballPos: oldBallPos, 
+                        newBallSpeed: {x: ball.speedX, y: ball.speedY} 
+                    });
+                }
+
+                const ownPaddleX = isPlayerOriginBalls ? playerPaddleX : aiPaddleX;
+                const ownPaddleY = isPlayerOriginBalls ? PLAYER_PADDLE_Y : AI_PADDLE_Y;
+                const opponentPaddleX = isPlayerOriginBalls ? aiPaddleX : playerPaddleX;
+                const opponentPaddleY = isPlayerOriginBalls ? AI_PADDLE_Y : PLAYER_PADDLE_Y;
+                
+                const ownPaddleTop = ownPaddleY;
+                const ownPaddleCatchMinY = ownPaddleY + PADDLE_ARM_HEIGHT;
+                const ownPaddleCatchMaxY = ownPaddleY + PADDLE_TOTAL_HEIGHT;
+                const ownPaddleBottom = ownPaddleY + PADDLE_TOTAL_HEIGHT;
+
+                // Own paddle collision & Catch Logic
+                if ((isPlayerOriginBalls && ball.y + ball.speedY > ownPaddleTop - BALL_RADIUS && ball.speedY > 0) ||
+                    (!isPlayerOriginBalls && ball.y + ball.speedY < ownPaddleBottom + BALL_RADIUS && ball.speedY < 0)) {
+                    if (ball.x > ownPaddleX && ball.x < ownPaddleX + PADDLE_WIDTH) { 
+                        if ((isPlayerOriginBalls && ball.y + BALL_RADIUS >= ownPaddleTop && ball.y < ownPaddleBottom) || 
+                            (!isPlayerOriginBalls && ball.y - BALL_RADIUS <= ownPaddleBottom && ball.y > ownPaddleTop)) {
+                            
+                            const paddleCenterX = ownPaddleX + PADDLE_WIDTH / 2;
+                            const isInCatchSpotX = ball.x > ownPaddleX + PADDLE_ARM_WIDTH && ball.x < ownPaddleX + PADDLE_WIDTH - PADDLE_ARM_WIDTH;
+                            // More precise Y check for catch spot (within the U's base depth)
+                            const isInCatchSpotY = (isPlayerOriginBalls && ball.y > ownPaddleCatchMinY - BALL_RADIUS && ball.y < ownPaddleCatchMaxY + BALL_RADIUS) ||
+                                                 (!isPlayerOriginBalls && ball.y > ownPaddleY - BALL_RADIUS && ball.y < ownPaddleY + PADDLE_BASE_HEIGHT + BALL_RADIUS);
+
+
+                            let wantsToCatch = isPlayerOriginBalls ? playerWantsToCatch : aiWantsToCatch;
+                            let heldBallRef = isPlayerOriginBalls ? playerHeldBall : aiHeldBall;
+                           
+                            if (wantsToCatch && isInCatchSpotX && isInCatchSpotY && !heldBallRef && Math.abs(ball.speedY) < BASE_BALL_SPEED_MAGNITUDE * 1.5) { // Catch if not too fast
+                                const caughtBall = ballArray.splice(i, 1)[0];
+                                if (isPlayerOriginBalls) {
+                                    playerHeldBall = caughtBall;
+                                    logGameData("Player Caught Ball", {ballPos: {x:playerHeldBall.x, y:playerHeldBall.y}, paddleX: playerPaddleX});
+                                } else {
+                                    aiHeldBall = caughtBall;
+                                    aiShootTimer = AI_SHOOT_DELAY_FRAMES; 
+                                    logGameData("AI Caught Ball", {ballPos: {x:aiHeldBall.x, y:aiHeldBall.y}, paddleX: aiPaddleX});
+                                }
+                                if (isPlayerOriginBalls) playerWantsToCatch = false; else aiWantsToCatch = false;
+                                continue; 
+                            } else { // Normal bounce
+                                ball.speedY = -ball.speedY;
+                                let deltaX = ball.x - (ownPaddleX + PADDLE_WIDTH / 2);
+                                ball.speedX = deltaX * 0.22; // Enhanced angle control
+                                ball.rallyHitCount = (ball.rallyHitCount || 0) + 1;
+                                logGameData("Paddle Hit (Own)", { 
+                                    paddleOwner: (isPlayerOriginBalls ? 'Player' : 'AI'),
+                                    ballPos: oldBallPos, oldBallSpeed: oldBallSpeed,
+                                    newBallSpeed: {x: ball.speedX, y: ball.speedY},
+                                    paddleX: ownPaddleX, hitOffsetRatio: deltaX / (PADDLE_WIDTH/2),
+                                    rallyCount: ball.rallyHitCount, ballSupercharged: ball.isSupercharged
+                                });
+                                if (ball.rallyHitCount >= RALLY_HIT_THRESHOLD_FOR_SPEEDUP && !ball.isBoosted && !ball.isSupercharged) {
+                                    ball.speedX = Math.min(MAX_BALL_SPEED_COMPONENT, Math.max(-MAX_BALL_SPEED_COMPONENT, ball.speedX * RALLY_SPEEDUP_FACTOR));
+                                    ball.speedY = Math.min(MAX_BALL_SPEED_COMPONENT, Math.max(-MAX_BALL_SPEED_COMPONENT, ball.speedY * RALLY_SPEEDUP_FACTOR));
+                                    logGameData("Rally Speed Up!", {ballOwner: (isPlayerOriginBalls ? 'Player' : 'AI'), newSpeed: {x: ball.speedX, y: ball.speedY}});
+                                    ball.rallyHitCount = 0; 
+                                }
+                                ball.isSupercharged = false; 
+                            }
+                        }
+                    }
+                }
+
+                // Opponent paddle collision
+                if ((isPlayerOriginBalls && ball.y + ball.speedY < opponentPaddleY + PADDLE_TOTAL_HEIGHT + BALL_RADIUS && ball.speedY < 0) ||
+                    (!isPlayerOriginBalls && ball.y + ball.speedY > opponentPaddleY - BALL_RADIUS && ball.speedY > 0) ) {
+                     if (ball.x + BALL_RADIUS > opponentPaddleX && ball.x - BALL_RADIUS < opponentPaddleX + PADDLE_WIDTH) {
+                        if ((isPlayerOriginBalls && ball.y - BALL_RADIUS <= opponentPaddleY + PADDLE_TOTAL_HEIGHT) ||
+                            (!isPlayerOriginBalls && ball.y + BALL_RADIUS >= opponentPaddleY)) {
+                            ball.speedY = -ball.speedY;
+                            let deltaX = ball.x - (opponentPaddleX + PADDLE_WIDTH / 2);
+                            ball.speedX = deltaX * 0.22; 
+                            ball.rallyHitCount = (ball.rallyHitCount || 0) + 1;
+                            ball.isSupercharged = false;
+                             logGameData("Paddle Hit (Opponent's)", { 
+                                hitByBallOwner: (isPlayerOriginBalls ? 'Player' : 'AI'),
+                                opponentPaddleOwner: (isPlayerOriginBalls ? 'AI' : 'Player'),
+                                ballPos: oldBallPos, oldBallSpeed: oldBallSpeed,
+                                newBallSpeed: {x: ball.speedX, y: ball.speedY},
+                                opponentPaddleX: opponentPaddleX, hitOffsetRatio: deltaX / (PADDLE_WIDTH/2),
+                                rallyCount: ball.rallyHitCount, ballSupercharged: ball.isSupercharged
+                            });
+                             if (ball.rallyHitCount >= RALLY_HIT_THRESHOLD_FOR_SPEEDUP && !ball.isBoosted && !ball.isSupercharged) {
+                                ball.speedX = Math.min(MAX_BALL_SPEED_COMPONENT, Math.max(-MAX_BALL_SPEED_COMPONENT, ball.speedX * RALLY_SPEEDUP_FACTOR));
+                                ball.speedY = Math.min(MAX_BALL_SPEED_COMPONENT, Math.max(-MAX_BALL_SPEED_COMPONENT, ball.speedY * RALLY_SPEEDUP_FACTOR));
+                                logGameData("Rally Speed Up!", {ballOwner: (isPlayerOriginBalls ? 'Player' : 'AI'), newSpeed: {x: ball.speedX, y: ball.speedY}});
+                                ball.rallyHitCount = 0;
+                            }
+                        }
+                    }
+                }
+
+                let scored = false;
+                let goalPosition = {x: ball.x, y: ball.y}; 
+
+                if (isPlayerOriginBalls) { 
+                    if (ball.y + ball.speedY < BALL_RADIUS) { 
+                        playerScore += 1; 
+                        goalPosition.y = BALL_RADIUS -1; 
+                        logGameData("Player scores GOAL! (W past AI - 1pt)", { playerScore, aiScore, ballFinalPos: goalPosition, ballSpeed: oldBallSpeed, supercharged: ball.isSupercharged });
+                        ballArray.splice(i, 1); 
+                        scored = true;
+                    } else if (ball.y + ball.speedY > canvas.height - BALL_RADIUS) { 
+                        aiScore += 2; 
+                        goalPosition.y = canvas.height - BALL_RADIUS + 1;
+                        logGameData("AI scores (Player W ball out own side - 2pts)!", { playerScore, aiScore, ballFinalPos: goalPosition, ballSpeed: oldBallSpeed, supercharged: ball.isSupercharged });
+                        ballArray.splice(i, 1); 
+                        scored = true;
+                    }
+                } else { 
+                    if (ball.y + ball.speedY > canvas.height - BALL_RADIUS) { 
+                        aiScore += 1; 
+                        goalPosition.y = canvas.height - BALL_RADIUS + 1;
+                        logGameData("AI scores GOAL! (Y past Player - 1pt)", { playerScore, aiScore, ballFinalPos: goalPosition, ballSpeed: oldBallSpeed, supercharged: ball.isSupercharged });
+                        ballArray.splice(i, 1); 
+                        scored = true;
+                    } else if (ball.y + ball.speedY < BALL_RADIUS) { 
+                        playerScore += 2; 
+                        goalPosition.y = BALL_RADIUS -1;
+                        logGameData("Player scores (AI Y ball out own side - 2pts)!", { playerScore, aiScore, ballFinalPos: goalPosition, ballSpeed: oldBallSpeed, supercharged: ball.isSupercharged });
+                        ballArray.splice(i, 1); 
+                        scored = true;
+                    }
+                }
+                
+                if (!scored) { 
+                    ball.x += ball.speedX;
+                    ball.y += ball.speedY;
+                } else { 
+                    updateScoreDisplays(); 
+                    if (!checkWinCondition()) { // Only respawn if game is not over
+                        // Persistent ball logic handled after loop
+                    } else {
+                        return; // Game ended, stop processing this ball array
+                    }
+                }
+            }
+            if (gameRunning && playerScore < WINNING_SCORE && aiScore < WINNING_SCORE) {
+                if (isPlayerOriginBalls && playerBalls.length === 0 && !playerHeldBall) {
+                    spawnNewBall('player', 'respawn_array_empty');
+                } else if (!isPlayerOriginBalls && aiBalls.length === 0 && !aiHeldBall) {
+                    spawnNewBall('ai', 'respawn_array_empty');
+                }
+            }
+        }
+        
+        function handleBallToBallCollision() {
+            if (playerBalls.length > 0 && aiBalls.length > 0) {
+                const pBall = playerBalls[0]; 
+                const aBall = aiBalls[0];
+
+                if (pBall && aBall) { 
+                    const dx = pBall.x - aBall.x;
+                    const dy = pBall.y - aBall.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < BALL_RADIUS * 2) { 
+                        let playerBallBroken = false;
+                        let aiBallBroken = false;
+                        let scorer = null;
+
+                        if (pBall.isSupercharged && !aBall.isSupercharged) {
+                            logGameData("Player Supercharged Ball BROKE AI Ball", {playerBallPos: {x:pBall.x, y:pBall.y}, aiBallPos: {x:aBall.x, y:aBall.y}});
+                            aiBalls.splice(0, 1); 
+                            aiBallBroken = true;
+                            playerScore++; 
+                            scorer = 'Player';
+                            pBall.isSupercharged = false; 
+                        } else if (aBall.isSupercharged && !pBall.isSupercharged) {
+                            logGameData("AI Supercharged Ball BROKE Player Ball", {aiBallPos: {x:aBall.x, y:aBall.y}, playerBallPos: {x:pBall.x, y:pBall.y}});
+                            playerBalls.splice(0, 1); 
+                            playerBallBroken = true;
+                            aiScore++; 
+                            scorer = 'AI';
+                            aBall.isSupercharged = false; 
+                        } else if (pBall.isSupercharged && aBall.isSupercharged) {
+                            logGameData("MUTUAL Supercharged Ball Break!", {playerBallPos: {x:pBall.x, y:pBall.y}, aiBallPos: {x:aBall.x, y:aBall.y}});
+                            playerBalls.splice(0, 1);
+                            aiBalls.splice(0, 1);
+                            playerBallBroken = true;
+                            aiBallBroken = true;
+                        } else { 
+                            logGameData("Normal Ball-to-Ball Collision", {
+                                pBallData: {pos:{x:pBall.x, y:pBall.y}, speed:{x: pBall.speedX, y: pBall.speedY}},
+                                aBallData: {pos:{x:aBall.x, y:aBall.y}, speed:{x: aBall.speedX, y: aBall.speedY}}
+                            });
+                            const tempSpeedX = pBall.speedX;
+                            const tempSpeedY = pBall.speedY;
+                            pBall.speedX = aBall.speedX;
+                            pBall.speedY = aBall.speedY;
+                            aBall.speedX = tempSpeedX;
+                            aBall.speedY = tempSpeedY;
+
+                            const overlap = (BALL_RADIUS * 2 - distance) / 2 + 0.1; // Ensure separation
+                            pBall.x += (overlap * dx / distance);
+                            pBall.y += (overlap * dy / distance);
+                            aBall.x -= (overlap * dx / distance);
+                            aBall.y -= (overlap * dy / distance);
+                        }
+                        
+                        if (scorer) {
+                             logGameData(`${scorer} scores 1pt (Ball Break)`, { playerScore, aiScore });
+                        }
+                        updateScoreDisplays();
+                        if (checkWinCondition()) return;
+
+                        if (gameRunning && playerScore < WINNING_SCORE && aiScore < WINNING_SCORE) {
+                            if (playerBallBroken && playerBalls.length === 0 && !playerHeldBall) {
+                                spawnNewBall('player', 'respawn_ball_broken');
+                            }
+                            if (aiBallBroken && aiBalls.length === 0 && !aiHeldBall) {
+                                spawnNewBall('ai', 'respawn_ball_broken');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateScoreDisplays() {
+            playerScoreDisplay.textContent = `Player: ${playerScore}`;
+            aiScoreDisplay.textContent = `AI: ${aiScore}`;
+        }
+        
+        function displayMessage(msg) {
+            if (!gamePaused || msg.includes("PAUSED") || msg.includes("WINS") || msg.includes("GAME OVER")) {
+                 messageArea.textContent = msg;
+            } else if (gamePaused && messageArea.textContent !== "" && !messageArea.textContent.includes("PAUSED")){
+            } else if (!gamePaused && messageArea.textContent.includes("PAUSED")) {
+                 messageArea.textContent = ""; 
+            }
+        }
+
+        function checkWinCondition() {
+            if (!gameRunning) return false; 
+
+            if (playerScore >= WINNING_SCORE) {
+                displayMessage("PLAYER WINS!");
+                gameOver('Player');
+                return true;
+            } else if (aiScore >= WINNING_SCORE) {
+                displayMessage("AI WINS! GAME OVER!");
+                gameOver('AI');
+                return true;
+            }
+            return false;
+        }
+        
+        function drawGameGraphics() { 
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBricks();
+            drawPaddle(playerPaddleX, PLAYER_PADDLE_Y, '#00cc44', 'player'); 
+            drawPaddle(aiPaddleX, AI_PADDLE_Y, '#ff8800', 'ai');    
+            
+            playerBalls.forEach(ball => { ball.isPlayerOriginBall = true; drawBall(ball); });
+            if(playerHeldBall) { playerHeldBall.isPlayerOriginBall = true; drawBall(playerHeldBall); }
+
+            aiBalls.forEach(ball => { ball.isPlayerOriginBall = false; drawBall(ball); });
+            if(aiHeldBall) { aiHeldBall.isPlayerOriginBall = false; drawBall(aiHeldBall); }
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return; 
+            if (gamePaused) { 
+                return; 
+            }
+
+            const currentTime = Date.now();
+            const deltaTime = currentTime - lastFrameTime;
+            lastFrameTime = currentTime;
+            totalFramesRendered++;
+            frameCountForDeltaLog++;
+            if (frameCountForDeltaLog >= 120) { 
+                logGameData("Frame Timing", { deltaTimeMs: deltaTime, totalFrames: totalFramesRendered, 
+                    playerPaddleX: playerPaddleX, aiPaddleX: aiPaddleX,
+                    playerBallsCount: playerBalls.length + (playerHeldBall ? 1 : 0),
+                    aiBallsCount: aiBalls.length + (aiHeldBall ? 1 : 0)
+                });
+                frameCountForDeltaLog = 0;
+            }
+
+            updatePlayerPaddle();
+            updateAiPaddle();
+            
+            updateAndProcessBallArray(playerBalls, true);
+            // Only process AI balls if game is still running after player balls update
+            if (gameRunning) updateAndProcessBallArray(aiBalls, false);
+            
+            // Only handle ball-to-ball collision if game is still running
+            if (gameRunning) handleBallToBallCollision(); 
+            
+            drawGameGraphics();
+            
+            // updateScoreDisplays(); // Called within updateAndProcessBallArray on score
+            // checkWinCondition();   // Called within updateAndProcessBallArray on score & handleBallToBallCollision
+
+            if (gameRunning) { // Continue loop if game not ended by win condition checks
+                animationFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function resetGameVariables() {
+            playerScore = 0;
+            aiScore = 0;
+            updateScoreDisplays();
+            
+            playerPaddleX = (canvas.width - PADDLE_WIDTH) / 2;
+            aiPaddleX = (canvas.width - PADDLE_WIDTH) / 2;
+            aiTargetX = aiPaddleX; 
+            leftArrowPressed = false;
+            rightArrowPressed = false;
+            spacebarDown = false;
+            playerWantsToCatch = false;
+            playerHeldBall = null;
+            aiWantsToCatch = false;
+            aiHeldBall = null;
+            aiShootTimer = 0;
+            
+            playerBalls = []; 
+            aiBalls = [];   
+            initBricks(); 
+            if (gameRunning || gameLogHistory.length > 0 && !gameLogHistory[gameLogHistory.length-1].includes("Game variables reset (initial).")) { 
+                 gameLogHistory = []; 
+                 logGameData("Game variables reset for new game.", {version: GAME_VERSION});
+            } else if (gameLogHistory.length === 0) { // Very first run
+                 logGameData("Game variables reset (initial).", {version: GAME_VERSION});
+            }
+        }
+
+        function startGame() {
+            logGameData("Action: startGame() called.");
+            gameStartTime = Date.now(); 
+            lastFrameTime = Date.now(); 
+            frameCountForDeltaLog = 0;
+            totalFramesRendered = 0;
+            
+            if (gameRunning && animationFrameId) { 
+                cancelAnimationFrame(animationFrameId);
+            }
+            resetGameVariables(); 
+            
+            spawnNewBall('player', 'initial_game_start'); 
+            spawnNewBall('ai', 'initial_game_start');
+
+            gameRunning = true; 
+            gamePaused = false; 
+            startButton.textContent = "Restart (R)";
+            copyLogButton.textContent = 'Copy Log & Pause'; 
+            logContainer.style.display = 'none'; 
+            displayMessage("First to " + WINNING_SCORE + " points wins!"); 
+            logGameData("Game Started", { 
+                winningScore: WINNING_SCORE, 
+                brickPattern: currentBrickPatternName,
+                initialPlayerBalls: playerBalls.length, 
+                initialAiBalls: aiBalls.length,
+                playerPaddleX_start: playerPaddleX,
+                aiPaddleX_start: aiPaddleX,
+                timestamp: Date.now()
+            });
+            
+            animationFrameId = requestAnimationFrame(gameLoop); 
+        }
+
+        function gameOver(winner) {
+            const gameDurationMs = Date.now() - gameStartTime;
+            const gameDurationSec = (gameDurationMs / 1000).toFixed(2);
+            logGameData("Game Over", { 
+                winner: winner, 
+                playerScore, 
+                aiScore, 
+                finalPlayerBalls: playerBalls.length + (playerHeldBall ? 1:0), 
+                finalAiBalls: aiBalls.length + (aiHeldBall ? 1:0),
+                durationSeconds: parseFloat(gameDurationSec),
+                totalFrames: totalFramesRendered,
+                avgFps: parseFloat((totalFramesRendered / (Math.max(1, gameDurationMs) / 1000)).toFixed(2)), // Avoid division by zero
+                brickPattern: currentBrickPatternName,
+                timestamp: Date.now()
+            });
+            gameRunning = false; 
+            gamePaused = false; 
+            startButton.textContent = "Play Again (R)";
+            copyLogButton.textContent = 'Copy Final Log'; 
+            if (logContainer.style.display !== 'none' || gameLogHistory.length > 0) { // Show log if it was open or if there's history
+                gameLogOutput.value = gameLogHistory.join('\n');
+                gameLogOutput.scrollTop = gameLogOutput.scrollHeight;
+                logContainer.style.display = 'block'; 
+            }
+        }
+
+        // Initial setup
+        displayMessage("Arrows:Move, Space:Catch/Shoot, S:Pause, R:Start/Restart");
+        calculateBrickOffsetTop(); 
+        initBricks(); 
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBricks();
+        drawPaddle(playerPaddleX, PLAYER_PADDLE_Y, '#00cc44', 'player');
+        drawPaddle(aiPaddleX, AI_PADDLE_Y, '#ff8800', 'ai');
+        logGameData("Game Initialized (Static Display)", {version: GAME_VERSION, winningScore: WINNING_SCORE});
+        
+    </script>
+</body>
+</html>
