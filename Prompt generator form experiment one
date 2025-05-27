@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meta-Prompt Generator Input</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        label {
+            font-weight: 600;
+            color: #374151; /* gray-700 */
+        }
+        input[type="text"],
+        textarea,
+        select {
+            border-color: #D1D5DB; /* gray-300 */
+        }
+        input[type="text"]:focus,
+        textarea:focus,
+        select:focus {
+            border-color: #3B82F6; /* blue-500 */
+            box-shadow: 0 0 0 2px #BFDBFE; /* blue-200 */
+        }
+        .btn-primary {
+            background-color: #2563EB; /* blue-600 */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #1D4ED8; /* blue-700 */
+        }
+        .btn-secondary {
+            background-color: #6B7280; /* gray-500 */
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #4B5563; /* gray-600 */
+        }
+         .btn-tertiary {
+            background-color: #10B981; /* emerald-500 */
+            color: white;
+        }
+        .btn-tertiary:hover {
+            background-color: #059669; /* emerald-600 */
+        }
+        .output-box {
+            background-color: #f9fafb; /* gray-50 */
+            border: 1px dashed #d1d5db; /* gray-300 */
+        }
+        .qna-item {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e5e7eb; /* gray-200 */
+        }
+        .qna-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .qna-item label {
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+        .qna-item .input-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem; /* Space between input and button */
+        }
+        .qna-item input[type="text"], .qna-item textarea {
+            flex-grow: 1; /* Input field takes available space */
+        }
+        .speak-question-btn, .add-answer-btn {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.8rem;
+            margin-left: 8px; /* Space out speak button */
+        }
+        #qnaLogOutput {
+            white-space: pre-wrap; /* Preserve formatting in textarea */
+            background-color: #f3f4f6; /* Slightly different background for log */
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            min-height: 150px;
+        }
+        .status-message {
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .status-success { background-color: #dcfce7; color: #14532d; } /* green */
+        .status-error { background-color: #fee2e2; color: #991b1b; } /* red */
+        .status-info { background-color: #e0f2fe; color: #0c4a6e; } /* blue */
+
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-2xl w-full space-y-8 bg-white p-10 rounded-xl shadow-lg">
+        <div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                Meta-Prompt Creation Helper
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Fill out the details below to help me create a prompt that will, in turn, help you create better prompts!
+            </p>
+        </div>
+
+        <form id="metaPromptForm" class="mt-8 space-y-6">
+            <div class="qna-item">
+                <div class="flex items-center justify-between">
+                    <label for="primaryGoal" class="block text-sm font-medium text-gray-700">
+                        1. What is the primary goal of the final prompts you want to create?
+                    </label>
+                    <button type="button" class="speak-question-btn btn-secondary" data-question-id="primaryGoal">Speak</button>
+                </div>
+                <p class="text-xs text-gray-500 mb-1">(e.g., generate stories, write code, summarize text)</p>
+                <div class="mt-1 input-group">
+                    <input id="primaryGoal" name="primaryGoal" type="text" required
+                           class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                           placeholder="e.g., Generate creative story ideas">
+                    <button type="button" class="add-answer-btn btn-tertiary" data-question-id="primaryGoal" data-question-num="1">Log Answer</button>
+                </div>
+            </div>
+
+            <div class="qna-item">
+                 <div class="flex items-center justify-between">
+                    <label for="targetAudience" class="block text-sm font-medium text-gray-700">
+                        2. Who is the target audience for the final prompts?
+                    </label>
+                    <button type="button" class="speak-question-btn btn-secondary" data-question-id="targetAudience">Speak</button>
+                </div>
+                <p class="text-xs text-gray-500 mb-1">(e.g., beginners, experts, children, specific profession)</p>
+                <div class="mt-1 input-group">
+                    <input id="targetAudience" name="targetAudience" type="text"
+                           class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                           placeholder="e.g., Marketing professionals">
+                    <button type="button" class="add-answer-btn btn-tertiary" data-question-id="targetAudience" data-question-num="2">Log Answer</button>
+                </div>
+            </div>
+
+            <div class="qna-item">
+                <div class="flex items-center justify-between">
+                    <label for="keyElements" class="block text-sm font-medium text-gray-700">
+                        3. What key elements or variables should the meta-prompt guide users to include in their prompts?
+                    </label>
+                    <button type="button" class="speak-question-btn btn-secondary" data-question-id="keyElements">Speak</button>
+                </div>
+                 <p class="text-xs text-gray-500 mb-1">(comma-separated)</p>
+                <div class="mt-1 input-group">
+                    <input id="keyElements" name="keyElements" type="text"
+                           class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                           placeholder="e.g., tone, length, format, specific keywords">
+                    <button type="button" class="add-answer-btn btn-tertiary" data-question-id="keyElements" data-question-num="3">Log Answer</button>
+                </div>
+            </div>
+
+            <div class="qna-item">
+                 <div class="flex items-center justify-between">
+                    <label for="outputFormat" class="block text-sm font-medium text-gray-700">
+                        4. What is the desired output format for the prompts generated by the meta-prompt?
+                    </label>
+                    <button type="button" class="speak-question-btn btn-secondary" data-question-id="outputFormat">Speak</button>
+                </div>
+                <p class="text-xs text-gray-500 mb-1">(e.g., list of questions, template, paragraph)</p>
+                <div class="mt-1 input-group">
+                    <input id="outputFormat" name="outputFormat" type="text"
+                           class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                           placeholder="e.g., A fill-in-the-blanks template">
+                    <button type="button" class="add-answer-btn btn-tertiary" data-question-id="outputFormat" data-question-num="4">Log Answer</button>
+                </div>
+            </div>
+            
+            <div class="qna-item">
+                <div class="flex items-center justify-between">
+                    <label for="constraints" class="block text-sm font-medium text-gray-700">
+                        5. Are there any constraints or things to avoid in the final prompts?
+                    </label>
+                    <button type="button" class="speak-question-btn btn-secondary" data-question-id="constraints">Speak</button>
+                </div>
+                <div class="mt-1 input-group">
+                    <textarea id="constraints" name="constraints" rows="3"
+                              class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              placeholder="e.g., Avoid technical jargon, keep prompts under 50 words"></textarea>
+                    <button type="button" class="add-answer-btn btn-tertiary self-start" data-question-id="constraints" data-question-num="5">Log Answer</button> 
+                </div>
+            </div>
+
+            <div class="qna-item">
+                <div class="flex items-center justify-between">
+                    <label for="llmPersona" class="block text-sm font-medium text-gray-700">
+                        6. What persona or role should I (the LLM generating the meta-prompt) adopt?
+                    </label>
+                     <button type="button" class="speak-question-btn btn-secondary" data-question-id="llmPersona">Speak</button>
+                </div>
+                <p class="text-xs text-gray-500 mb-1">(e.g., expert prompt engineer, helpful assistant)</p>
+                <div class="mt-1 input-group">
+                    <input id="llmPersona" name="llmPersona" type="text"
+                           class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                           placeholder="e.g., A creative writing coach">
+                    <button type="button" class="add-answer-btn btn-tertiary" data-question-id="llmPersona" data-question-num="6">Log Answer</button>
+                </div>
+            </div>
+
+            <div>
+                <button type="submit"
+                        class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 btn-primary">
+                    Generate Meta-Prompt Instructions
+                </button>
+            </div>
+        </form>
+         <p id="formSubmitStatus" class="text-center mt-2 text-sm"></p>
+
+
+        <div id="generatedPromptOutput" class="mt-8 p-6 output-box rounded-md hidden">
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Your Instructions for Me (to Create a Meta-Prompt):</h3>
+            <pre id="promptText" class="whitespace-pre-wrap text-sm text-gray-700 bg-white p-4 rounded-md border border-gray-200"></pre>
+            <button id="copyPromptButton" class="mt-4 py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 btn-primary">
+                Copy Instructions
+            </button>
+        </div>
+         <p id="copyStatusMessage" class="text-center mt-2 text-sm"></p>
+
+        <div id="qnaLogDisplayArea" class="mt-8 hidden">
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Q&A Log</h3>
+            <textarea id="qnaLogOutput" readonly class="w-full h-48 p-2 border border-gray-300 rounded-md"></textarea>
+        </div>
+        <div class="mt-4 flex space-x-2">
+            <button id="viewCopyQnaLogButton" class="btn-secondary py-2 px-4 rounded-md">View/Hide & Copy Q&A Log</button>
+        </div>
+        <p id="qnaLogCopyStatus" class="text-center mt-2 text-sm"></p>
+
+
+    </div>
+
+    <script>
+        const metaPromptForm = document.getElementById('metaPromptForm');
+        const generatedPromptOutput = document.getElementById('generatedPromptOutput');
+        const promptTextElement = document.getElementById('promptText');
+        const copyPromptButton = document.getElementById('copyPromptButton');
+        const copyStatusMessage = document.getElementById('copyStatusMessage');
+        const formSubmitStatus = document.getElementById('formSubmitStatus');
+
+        const qnaLogDisplayArea = document.getElementById('qnaLogDisplayArea');
+        const qnaLogOutput = document.getElementById('qnaLogOutput');
+        const viewCopyQnaLogButton = document.getElementById('viewCopyQnaLogButton');
+        const qnaLogCopyStatus = document.getElementById('qnaLogCopyStatus');
+
+        let qnaLog = []; // Array to store question-answer pairs
+        let speechSynthesis = window.speechSynthesis;
+        let samanthaVoice = null;
+
+        function loadVoices() {
+            if (typeof speechSynthesis === 'undefined') {
+                console.warn("Speech Synthesis API not supported.");
+                return;
+            }
+            let voices = speechSynthesis.getVoices();
+            if (voices.length) {
+                samanthaVoice = voices.find(voice => voice.name.toLowerCase().includes('samantha') && voice.lang.startsWith('en'));
+                if (!samanthaVoice) samanthaVoice = voices.find(voice => voice.lang.startsWith('en-US') && voice.name.toLowerCase().includes('female'));
+                if (!samanthaVoice) samanthaVoice = voices.find(voice => voice.lang.startsWith('en-US') && (voice.name.toLowerCase().includes('zira') || voice.name.toLowerCase().includes('google') || voice.name.toLowerCase().includes('microsoft')));
+                if (!samanthaVoice && voices.length > 0) samanthaVoice = voices.find(voice => voice.lang.startsWith('en-US')) || voices[0];
+                console.log("Selected voice for Samantha:", samanthaVoice ? samanthaVoice.name : "Default system voice");
+            } else {
+                setTimeout(loadVoices, 100); // Retry if voices not loaded yet
+            }
+        }
+
+        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        loadVoices(); // Initial attempt
+
+        function speakText(textToSpeak) {
+            if (!speechSynthesis) {
+                alert("Sorry, your browser doesn't support text-to-speech!");
+                return;
+            }
+            if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+            }
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            if (samanthaVoice) {
+                utterance.voice = samanthaVoice;
+            }
+            utterance.pitch = 1;
+            utterance.rate = 0.9;
+            utterance.volume = 1;
+            utterance.onerror = (event) => console.error("SpeechSynthesisUtterance Error:", event.error);
+            speechSynthesis.speak(utterance);
+        }
+
+        /**
+         * Helper function to display status messages.
+         * @param {HTMLElement} element - The HTML element to display the message in.
+         * @param {string} message - The message text.
+         * @param {string} type - 'success', 'error', or 'info'.
+         * @param {number} [duration=3000] - How long to display the message in milliseconds.
+         */
+        function showStatus(element, message, type = 'info', duration = 3000) {
+            element.textContent = message;
+            element.className = `text-center mt-2 text-sm status-${type}`;
+            element.classList.remove('hidden');
+            setTimeout(() => {
+                element.classList.add('hidden');
+                element.textContent = '';
+            }, duration);
+        }
+
+
+        // Add event listeners to "Speak Question" buttons
+        document.querySelectorAll('.speak-question-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const questionId = this.dataset.questionId;
+                const labelElement = document.querySelector(`label[for="${questionId}"]`);
+                if (labelElement) {
+                    speakText(labelElement.innerText.split('\n')[0]); // Speak only the main question text
+                }
+            });
+        });
+
+        // Add event listeners to "Log Answer" buttons
+        document.querySelectorAll('.add-answer-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const questionId = this.dataset.questionId;
+                const questionNum = this.dataset.questionNum;
+                const inputElement = document.getElementById(questionId);
+                const labelElement = document.querySelector(`label[for="${questionId}"]`);
+                
+                if (inputElement && inputElement.value.trim() !== "" && labelElement) {
+                    const questionText = labelElement.innerText.split('\n')[0].trim(); // Get main question text
+                    const answerText = inputElement.value.trim();
+                    
+                    // Avoid duplicate entries for the same question number
+                    const existingEntryIndex = qnaLog.findIndex(item => item.questionNumber === questionNum);
+                    if (existingEntryIndex > -1) {
+                        qnaLog[existingEntryIndex].answer = answerText; // Update existing
+                         showStatus(formSubmitStatus, `Answer for Q${questionNum} updated in log.`, 'success');
+                    } else {
+                        qnaLog.push({
+                            questionNumber: questionNum,
+                            questionText: questionText,
+                            answer: answerText,
+                            timestamp: new Date().toISOString()
+                        });
+                        showStatus(formSubmitStatus, `Answer for Q${questionNum} added to log.`, 'success');
+                    }
+                    // Do not clear inputElement.value here, user might want to refine it before submitting the whole form.
+                    console.log("Current Q&A Log:", qnaLog);
+                } else {
+                     showStatus(formSubmitStatus, `Please enter an answer for Question ${questionNum}.`, 'error');
+                }
+            });
+        });
+        
+        metaPromptForm.addEventListener('submit', function(event) {
+            event.preventDefault(); 
+
+            // Ensure all answers are logged before generating instructions
+            // This loop re-logs all current values, effectively updating any changes.
+            qnaLog = []; // Clear previous log for this submission to avoid duplicates if user clicks multiple times
+            document.querySelectorAll('.qna-item').forEach(item => {
+                const inputElement = item.querySelector('input[type="text"], textarea');
+                const labelElement = item.querySelector('label');
+                const questionNumButton = item.querySelector('.add-answer-btn');
+                if (inputElement && labelElement && questionNumButton && inputElement.value.trim() !== "") {
+                     qnaLog.push({
+                        questionNumber: questionNumButton.dataset.questionNum,
+                        questionText: labelElement.innerText.split('\n')[0].trim(),
+                        answer: inputElement.value.trim(),
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+            
+            if (qnaLog.length < 1 && !document.getElementById('primaryGoal').value.trim()) { // Check if at least primary goal is filled
+                 showStatus(formSubmitStatus, "Please fill out at least the primary goal and log answers before generating.", 'error', 4000);
+                return;
+            }
+
+
+            const formData = new FormData(metaPromptForm);
+            const primaryGoal = formData.get('primaryGoal') || "Not specified";
+            const targetAudience = formData.get('targetAudience') || "Not specified";
+            const keyElements = formData.get('keyElements') || "Not specified";
+            const outputFormat = formData.get('outputFormat') || "Not specified";
+            const constraints = formData.get('constraints') || "Not specified";
+            const llmPersona = formData.get('llmPersona') || 'AI assistant specialized in prompt engineering';
+
+            let instructionsForLLM = `As an ${llmPersona}, please generate a comprehensive "meta-prompt" or a set of guidelines. This meta-prompt will be used by end-users to help them create effective prompts for an AI.
+
+The meta-prompt should achieve the following, based on the user's input:
+1.  Primary Goal for final prompts: "${primaryGoal}".
+2.  Target Audience for final prompts: "${targetAudience}".
+3.  Key Elements/Variables to include in final prompts: "${keyElements}".
+4.  Desired Output Format of the meta-prompt itself (how it guides the user): "${outputFormat}".
+5.  Constraints/Avoidances for final prompts: "${constraints}".
+
+The meta-prompt you generate should be clear, actionable, and easy for users to follow. It could be a template, a checklist, a series of guiding questions, or a combination thereof, suitable for the specified output format. The goal is to empower users to write better prompts for their stated primary goal.
+`;
+
+            promptTextElement.textContent = instructionsForLLM;
+            generatedPromptOutput.classList.remove('hidden');
+            showStatus(formSubmitStatus, "Meta-prompt instructions generated below!", 'success');
+            copyStatusMessage.textContent = ""; 
+        });
+
+        copyPromptButton.addEventListener('click', function() {
+            const textToCopy = promptTextElement.textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    showStatus(copyStatusMessage, "Instructions copied to clipboard!", 'success');
+                }).catch(err => {
+                    console.error('Failed to copy text: ', err);
+                    showStatus(copyStatusMessage, "Failed to copy. Please copy manually.", 'error', 4000);
+                });
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                textArea.style.position = "fixed"; 
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showStatus(copyStatusMessage, "Instructions copied (fallback)!", 'success');
+                } catch (err) {
+                    console.error('Fallback: Oops, unable to copy', err);
+                    showStatus(copyStatusMessage, "Fallback copy failed. Please copy manually.", 'error', 4000);
+                }
+                document.body.removeChild(textArea);
+            }
+        });
+
+        viewCopyQnaLogButton.addEventListener('click', () => {
+            qnaLogDisplayArea.classList.toggle('hidden');
+            if (!qnaLogDisplayArea.classList.contains('hidden')) {
+                let logContent = "--- Q&A Log ---\n\n";
+                if (qnaLog.length === 0) {
+                    logContent += "No answers logged yet for the current form submission.";
+                } else {
+                    // Sort by question number before displaying
+                    qnaLog.sort((a, b) => parseInt(a.questionNumber) - parseInt(b.questionNumber));
+                    qnaLog.forEach(item => {
+                        logContent += `Q${item.questionNumber}: ${item.questionText}\n`;
+                        logContent += `Answer: ${item.answer}\n`;
+                        logContent += `Timestamp: ${item.timestamp}\n`;
+                        logContent += "----------------------------\n";
+                    });
+                }
+                qnaLogOutput.value = logContent;
+
+                // Attempt to copy when made visible
+                if (logText && qnaLog.length > 0) {
+                    navigator.clipboard.writeText(logText).then(() => {
+                        showStatus(qnaLogCopyStatus, "Q&A Log copied to clipboard!", 'success');
+                    }).catch(err => {
+                        console.error('Failed to copy Q&A log: ', err);
+                        qnaLogOutput.select();
+                        try {
+                            document.execCommand('copy');
+                            showStatus(qnaLogCopyStatus, "Q&A Log copied (fallback)!", 'success');
+                        } catch (e) {
+                             showStatus(qnaLogCopyStatus, "Copy failed. Select and copy manually.", 'error', 4000);
+                        }
+                    });
+                } else if (qnaLog.length === 0) {
+                     showStatus(qnaLogCopyStatus, "Log is empty, nothing to copy.", 'info');
+                }
+            } else {
+                 qnaLogCopyStatus.textContent = ""; // Clear status when hiding
+            }
+        });
+
+    </script>
+</body>
+</html>
