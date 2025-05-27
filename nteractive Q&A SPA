@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <title>Interactive Q&A Log</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Visualization & Content Choices: 
+        1. Question Display (for Q1, Q2, Q3 from source): 
+           - Goal: Clearly present project clarification questions.
+           - Presentation: Tailwind-styled cards for each question.
+           - Interaction: Text-to-speech for auditory presentation, textarea for textual answers, save button for logging, 5-star interactive rating.
+           - Justification: Directly addresses the need to collect detailed, rated answers for specific project aspects.
+           - Library/Method: HTML, Tailwind CSS, Vanilla JavaScript (Web Speech API, localStorage).
+        2. Log Management (View, Toggle, Copy):
+           - Goal: Allow user to review and export submitted data.
+           - Presentation: A collapsible text area in the top-left corner displaying logged entries.
+           - Interaction: Buttons to toggle log visibility and copy log content to clipboard.
+           - Justification: Provides transparency and utility for the collected data.
+           - Library/Method: HTML, Tailwind CSS, Vanilla JavaScript.
+        CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif; /* Matching font from example */
+        }
+        .log-container {
+            max-height: 200px; /* Limit height of log display */
+            overflow-y: auto; /* Allow scrolling for log */
+        }
+        .star-rating span {
+            cursor: pointer;
+            font-size: 1.8em; /* Larger stars */
+            color: #cbd5e1; /* Tailwind gray-300 for unselected stars */
+            transition: color 0.2s;
+        }
+        .star-rating span:hover,
+        .star-rating span.selected {
+            color: #facc15; /* Tailwind yellow-400 for selected/hover stars */
+        }
+        /* Custom message box */
+        .custom-message-box {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #10b981; /* Tailwind green-500 */
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            display: none; /* Initially hidden */
+        }
+        .custom-message-box.show {
+            display: block;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col items-center pt-5 pb-10 px-4">
+
+    <div id="appNotification" class="custom-message-box">Notification message</div>
+
+    <div class="w-full max-w-3xl">
+        <div class="mb-6 p-4 bg-white rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold mb-3 text-gray-700">Interaction Log</h2>
+            <div class="flex space-x-2 mb-3">
+                <button id="toggleLogBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition duration-150">Toggle Log</button>
+                <button id="copyLogBtn" class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition duration-150">Copy Log</button>
+            </div>
+            <div id="logDisplay" class="log-container bg-gray-50 p-3 border border-gray-300 rounded-md text-sm" style="display: none;">
+                <p>Log is currently empty.</p>
+            </div>
+        </div>
+
+        <div class="mb-8 p-6 bg-white rounded-lg shadow-md">
+            <h1 class="text-2xl font-bold text-center text-gray-800 mb-4">Project Clarification Interface</h1>
+            <p class="text-gray-600 text-center">
+                This interface is designed to capture your responses to key project questions. Please provide your answers, listen to questions if needed, and rate their relevance. Your input will be logged for review.
+            </p>
+        </div>
+
+        <div id="questionsArea" class="space-y-6">
+            </div>
+    </div>
+
+    <script>
+        const questionsData = [
+            {
+                id: "q1_log_structure",
+                text: "How should the log data be structured for optimal storage and retrieval?",
+                answer: "",
+                rating: 0
+            },
+            {
+                id: "q2_tts_fallback",
+                text: "If a voice named 'Samantha' is not available on the user's browser, what is the preferred fallback for text-to-speech?",
+                answer: "",
+                rating: 0
+            },
+            {
+                id: "q3_log_persistence",
+                text: "What is the expected behavior for the question and answer log when the user closes and reopens the W3Schools editor?",
+                answer: "",
+                rating: 0
+            }
+        ];
+
+        let log = [];
+
+        // Load log and answers from localStorage
+        function loadState() {
+            const savedLog = localStorage.getItem('interactionLog');
+            if (savedLog) {
+                log = JSON.parse(savedLog);
+            }
+            questionsData.forEach(qData => {
+                const savedEntry = log.find(entry => entry.id === qData.id);
+                if (savedEntry) {
+                    qData.answer = savedEntry.answer;
+                    qData.rating = savedEntry.rating;
+                }
+            });
+            renderQuestions();
+            renderLog();
+        }
+
+        // Save log to localStorage
+        function saveState() {
+            localStorage.setItem('interactionLog', JSON.stringify(log));
+        }
+        
+        // Show custom notification
+        function showNotification(message, duration = 3000) {
+            const notificationBox = document.getElementById('appNotification');
+            notificationBox.textContent = message;
+            notificationBox.classList.add('show');
+            setTimeout(() => {
+                notificationBox.classList.remove('show');
+            }, duration);
+        }
+
+        // Render questions on the page
+        function renderQuestions() {
+            const questionsArea = document.getElementById('questionsArea');
+            questionsArea.innerHTML = ''; // Clear existing questions
+
+            questionsData.forEach((qData, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'p-6 bg-white rounded-lg shadow-md';
+                questionDiv.dataset.id = qData.id;
+
+                questionDiv.innerHTML = `
+                    <p class="text-lg font-semibold text-gray-700 mb-2">${index + 1}. ${qData.text}</p>
+                    <button class="read-question-btn bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-3 rounded-md text-sm mb-3 transition duration-150">Read Question</button>
+                    <textarea class="answer-input w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-vertical min-h-[80px]" placeholder="Type your answer here...">${qData.answer}</textarea>
+                    <div class="mt-4 flex justify-between items-center">
+                        <button class="save-answer-btn bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition duration-150">Save Answer</button>
+                        <div class="star-rating">
+                            <span data-value="1" class="${qData.rating >= 1 ? 'selected' : ''}">★</span>
+                            <span data-value="2" class="${qData.rating >= 2 ? 'selected' : ''}">★</span>
+                            <span data-value="3" class="${qData.rating >= 3 ? 'selected' : ''}">★</span>
+                            <span data-value="4" class="${qData.rating >= 4 ? 'selected' : ''}">★</span>
+                            <span data-value="5" class="${qData.rating >= 5 ? 'selected' : ''}">★</span>
+                        </div>
+                    </div>
+                `;
+                questionsArea.appendChild(questionDiv);
+            });
+
+            // Add event listeners after rendering
+            attachEventListeners();
+        }
+
+        // Text-to-Speech function
+        function speakText(text) {
+            if (!('speechSynthesis' in window)) {
+                showNotification('Sorry, your browser does not support text-to-speech.');
+                return;
+            }
+            const utterance = new SpeechSynthesisUtterance(text);
+            const voices = speechSynthesis.getVoices();
+            
+            // Try to find 'Samantha'
+            let targetVoice = voices.find(voice => voice.name.toLowerCase().includes('samantha') && voice.lang.startsWith('en'));
+            
+            // If 'Samantha' not found, try any female English voice
+            if (!targetVoice) {
+                targetVoice = voices.find(voice => voice.lang.startsWith('en') && voice.name.toLowerCase().includes('female'));
+            }
+
+            // If still no specific voice, use the first available English voice or default
+            if (!targetVoice) {
+                targetVoice = voices.find(voice => voice.lang.startsWith('en')) || voices[0];
+            }
+
+            utterance.voice = targetVoice;
+            utterance.pitch = 1;
+            utterance.rate = 1;
+            utterance.volume = 1;
+            speechSynthesis.cancel(); // Cancel any previous speech
+            speechSynthesis.speak(utterance);
+        }
+
+        // Render log display
+        function renderLog() {
+            const logDisplay = document.getElementById('logDisplay');
+            if (log.length === 0) {
+                logDisplay.innerHTML = '<p class="italic text-gray-500">Log is currently empty.</p>';
+                return;
+            }
+            // Display in the original question order
+            const orderedLog = [];
+            questionsData.forEach(qData => {
+                const entry = log.find(item => item.id === qData.id);
+                if (entry) {
+                    orderedLog.push(entry);
+                }
+            });
+
+            logDisplay.innerHTML = orderedLog.map((entry, index) => {
+                const originalQuestion = questionsData.find(q => q.id === entry.id);
+                return `
+                    <div class="mb-3 pb-3 border-b border-gray-200 last:border-b-0">
+                        <p class="font-medium text-gray-600">Q${originalQuestion ? questionsData.indexOf(originalQuestion) + 1 : 'Unknown'}: ${entry.question}</p>
+                        <p class="ml-4 text-gray-500"><span class="font-semibold">Answer:</span> ${entry.answer || "Not answered"}</p>
+                        <p class="ml-4 text-gray-500"><span class="font-semibold">Rating:</span> ${entry.rating > 0 ? entry.rating + ' star(s)' : 'Not rated'}</p>
+                        <p class="ml-4 text-xs text-gray-400"><span class="font-semibold">Timestamp:</span> ${new Date(entry.timestamp).toLocaleString()}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Attach event listeners to dynamic elements
+        function attachEventListeners() {
+            document.querySelectorAll('.read-question-btn').forEach(button => {
+                button.onclick = function() {
+                    const questionText = this.parentElement.querySelector('p').textContent.split('. ').slice(1).join('. '); // Get text after "N. "
+                    speakText(questionText);
+                };
+            });
+
+            document.querySelectorAll('.save-answer-btn').forEach(button => {
+                button.onclick = function() {
+                    const questionDiv = this.closest('[data-id]');
+                    const questionId = questionDiv.dataset.id;
+                    const questionText = questionDiv.querySelector('p').textContent.split('. ').slice(1).join('. ');
+                    const answerText = questionDiv.querySelector('.answer-input').value;
+                    
+                    let currentRating = 0;
+                    const selectedStar = questionDiv.querySelector('.star-rating span.selected:last-child');
+                    if (selectedStar) {
+                        currentRating = parseInt(selectedStar.dataset.value);
+                    }
+                    
+                    // Update or add to log
+                    const existingEntryIndex = log.findIndex(entry => entry.id === questionId);
+                    const entry = {
+                        id: questionId,
+                        question: questionText,
+                        answer: answerText,
+                        rating: currentRating,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    if (existingEntryIndex > -1) {
+                        log[existingEntryIndex] = entry;
+                    } else {
+                        log.push(entry);
+                    }
+
+                    // Update questionsData as well for consistent state on re-render
+                    const qDataEntry = questionsData.find(q => q.id === questionId);
+                    if(qDataEntry) {
+                        qDataEntry.answer = answerText;
+                        qDataEntry.rating = currentRating;
+                    }
+                    
+                    saveState();
+                    renderLog();
+                    showNotification('Answer saved successfully!');
+                };
+            });
+
+            document.querySelectorAll('.star-rating span').forEach(star => {
+                star.onclick = function() {
+                    const ratingValue = parseInt(this.dataset.value);
+                    const starContainer = this.parentElement;
+                    const questionDiv = this.closest('[data-id]');
+                    const questionId = questionDiv.dataset.id;
+
+                    // Update UI for stars
+                    starContainer.querySelectorAll('span').forEach(s => {
+                        if (parseInt(s.dataset.value) <= ratingValue) {
+                            s.classList.add('selected');
+                        } else {
+                            s.classList.remove('selected');
+                        }
+                    });
+                    
+                    // Update rating in questionsData for persistence if saved
+                    const qDataEntry = questionsData.find(q => q.id === questionId);
+                    if(qDataEntry) {
+                        qDataEntry.rating = ratingValue; // Store rating immediately in JS model
+                    }
+                    // The actual save to log happens when "Save Answer" is clicked
+                };
+            });
+        }
+
+        // Event listeners for log management
+        document.getElementById('toggleLogBtn').onclick = function() {
+            const logDisplay = document.getElementById('logDisplay');
+            logDisplay.style.display = logDisplay.style.display === 'none' ? 'block' : 'none';
+            this.textContent = logDisplay.style.display === 'none' ? 'Show Log' : 'Hide Log';
+        };
+
+        document.getElementById('copyLogBtn').onclick = function() {
+            const logText = log.map(entry => {
+                const originalQuestion = questionsData.find(q => q.id === entry.id);
+                const qNum = originalQuestion ? questionsData.indexOf(originalQuestion) + 1 : 'Unknown';
+                return `Q${qNum}: ${entry.question}\nAnswer: ${entry.answer || "Not answered"}\nRating: ${entry.rating > 0 ? entry.rating + ' star(s)' : 'Not rated'}\nTimestamp: ${new Date(entry.timestamp).toLocaleString()}\n---`;
+            }).join('\n\n');
+
+            if (!logText || log.length === 0) {
+                showNotification('Log is empty, nothing to copy.');
+                return;
+            }
+
+            // Using the document.execCommand for wider compatibility in restricted environments like iframes
+            const textarea = document.createElement('textarea');
+            textarea.value = logText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showNotification('Log copied to clipboard!');
+            } catch (err) {
+                showNotification('Failed to copy log.');
+                console.error('Failed to copy log: ', err);
+            }
+            document.body.removeChild(textarea);
+        };
+        
+        // Ensure voices are loaded before trying to use them
+        // Some browsers load voices asynchronously
+        speechSynthesis.onvoiceschanged = () => {
+            // Voices are ready, no specific action needed here now
+            // as speakText function gets voices on each call.
+        };
+
+        // Initial load
+        window.onload = loadState;
+
+    </script>
+</body>
+</html>
