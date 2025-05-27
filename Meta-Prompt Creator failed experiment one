@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Meta-Prompt Creator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light, calm blue background */
+        }
+        .content-wrapper {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        label {
+            font-weight: 600;
+            color: #374151; /* gray-700 */
+        }
+        input[type="text"],
+        textarea,
+        select {
+            border-color: #D1D5DB; /* gray-300 */
+            width: 100%; /* Ensure inputs take full width of their container */
+        }
+        input[type="text"]:focus,
+        textarea:focus,
+        select:focus {
+            border-color: #3B82F6; /* blue-500 */
+            box-shadow: 0 0 0 2px #BFDBFE; /* blue-200 */
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem; /* rounded-md */
+            font-weight: 500; /* font-medium */
+            transition: background-color 0.2s;
+            cursor: pointer;
+            text-align: center;
+        }
+        .btn-primary { background-color: #2563EB; color: white; } /* blue-600 */
+        .btn-primary:hover { background-color: #1D4ED8; } /* blue-700 */
+        .btn-secondary { background-color: #6B7280; color: white; } /* gray-500 */
+        .btn-secondary:hover { background-color: #4B5563; } /* gray-600 */
+        .btn-tertiary { background-color: #10B981; color: white; } /* emerald-500 */
+        .btn-tertiary:hover { background-color: #059669; } /* emerald-600 */
+        .btn-small { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+
+        .output-box {
+            background-color: #f9fafb; /* gray-50 */
+            border: 1px dashed #d1d5db; /* gray-300 */
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-top: 1.5rem;
+        }
+        .qna-item {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid #e5e7eb; /* gray-200 */
+        }
+        .qna-item:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .qna-item label { display: block; margin-bottom: 0.25rem; }
+        .qna-item .input-container { margin-top: 0.25rem; }
+        .qna-item .input-with-button { display: flex; align-items: center; gap: 0.5rem; }
+        .qna-item input[type="text"], .qna-item textarea { flex-grow: 1; }
+        
+        #qnaLogOutput {
+            white-space: pre-wrap; 
+            background-color: #f3f4f6; 
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            padding: 0.75rem;
+            min-height: 150px;
+            width: 100%;
+        }
+        .status-message {
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .status-success { background-color: #dcfce7; color: #14532d; }
+        .status-error { background-color: #fee2e2; color: #991b1b; }
+        .status-info { background-color: #e0f2fe; color: #0c4a6e; }
+    </style>
+</head>
+<body>
+    <div class="content-wrapper">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-gray-700">Meta-Prompt Creator</h1>
+            <button id="copyGeneratedInstructionsButton" class="btn btn-primary hidden">Copy Generated Instructions</button>
+        </div>
+        <p id="pageCopyStatus" class="status-message hidden"></p>
+
+        <div class="interactive-tts my-4 p-4 border rounded-md bg-gray-50">
+            <label for="ttsInputTop" class="block text-sm font-medium text-gray-700 mb-1">Hear Your Text (Samantha's Voice):</label>
+            <button id="speakTopButton" class="btn btn-secondary btn-small mb-1">Speak This Text</button>
+            <textarea id="ttsInputTop" rows="2" class="p-2 border rounded-md" placeholder="Paste text here..."></textarea>
+        </div>
+
+        <form id="metaPromptForm" class="mt-8 space-y-6">
+            </form>
+        <p id="formSubmitStatus" class="status-message hidden"></p>
+
+        <div id="generatedPromptOutput" class="output-box hidden">
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Your Instructions for Me (to Create the Meta-Prompt):</h3>
+            <pre id="promptText" class="whitespace-pre-wrap text-sm text-gray-700 bg-white p-4 rounded-md border border-gray-200"></pre>
+            <button id="speakGeneratedInstructionsButton" class="btn btn-secondary mt-4">Speak Instructions</button>
+        </div>
+        
+        <div id="qnaLogDisplayArea" class="mt-8 hidden">
+            <h3 class="text-xl font-semibold text-gray-800 mb-3">Q&A Log</h3>
+            <textarea id="qnaLogOutput" readonly></textarea>
+        </div>
+        <div class="mt-4 flex space-x-2">
+            <button id="viewCopyQnaLogButton" class="btn btn-secondary">View/Hide & Copy Q&A Log</button>
+        </div>
+        <p id="qnaLogCopyStatus" class="status-message hidden"></p>
+
+        <hr class="my-8">
+
+        <div class="interactive-tts my-4 p-4 border rounded-md bg-gray-50">
+            <label for="ttsInputBottom" class="block text-sm font-medium text-gray-700 mb-1">Hear More Text (Samantha's Voice):</label>
+            <textarea id="ttsInputBottom" rows="2" class="p-2 border rounded-md" placeholder="Paste more text here..."></textarea>
+            <button id="speakBottomButton" class="btn btn-secondary btn-small mt-1">Speak This Text</button>
+        </div>
+    </div>
+
+<script>
+    // --- DOM Element References ---
+    const metaPromptForm = document.getElementById('metaPromptForm');
+    const generatedPromptOutput = document.getElementById('generatedPromptOutput');
+    const promptTextElement = document.getElementById('promptText');
+    const copyGeneratedInstructionsButton = document.getElementById('copyGeneratedInstructionsButton'); // Renamed
+    const speakGeneratedInstructionsButton = document.getElementById('speakGeneratedInstructionsButton');
+    const pageCopyStatus = document.getElementById('pageCopyStatus'); // For general copy status
+    const formSubmitStatus = document.getElementById('formSubmitStatus');
+
+    const qnaLogDisplayArea = document.getElementById('qnaLogDisplayArea');
+    const qnaLogOutput = document.getElementById('qnaLogOutput');
+    const viewCopyQnaLogButton = document.getElementById('viewCopyQnaLogButton');
+    const qnaLogCopyStatus = document.getElementById('qnaLogCopyStatus');
+
+    const ttsInputTop = document.getElementById('ttsInputTop');
+    const speakTopButton = document.getElementById('speakTopButton');
+    const ttsInputBottom = document.getElementById('ttsInputBottom');
+    const speakBottomButton = document.getElementById('speakBottomButton');
+
+    let qnaLog = []; // Array to store question-answer pairs
+    let speechSynthesis = window.speechSynthesis;
+    let samanthaVoice = null;
+
+    // --- Voice Selection ---
+    function loadVoices() {
+        if (typeof speechSynthesis === 'undefined') {
+            console.warn("Speech Synthesis API not supported in this browser.");
+            return;
+        }
+        let voices = speechSynthesis.getVoices();
+        if (voices.length) {
+            samanthaVoice = voices.find(voice => voice.name.toLowerCase().includes('samantha') && voice.lang.startsWith('en'));
+            if (!samanthaVoice) samanthaVoice = voices.find(voice => voice.lang.startsWith('en-US') && voice.name.toLowerCase().includes('female'));
+            if (!samanthaVoice) samanthaVoice = voices.find(voice => voice.lang.startsWith('en-US') && (voice.name.toLowerCase().includes('zira') || voice.name.toLowerCase().includes('google') || voice.name.toLowerCase().includes('microsoft')));
+            if (!samanthaVoice && voices.length > 0) samanthaVoice = voices.find(voice => voice.lang.startsWith('en-US')) || voices[0];
+            console.log("Selected voice for Samantha:", samanthaVoice ? samanthaVoice.name : "Default system voice");
+        } else {
+            setTimeout(loadVoices, 100); 
+        }
+    }
+
+    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    loadVoices(); 
+
+    // --- TTS Function ---
+    function speakText(textToSpeak) {
+        if (!speechSynthesis) {
+            alert("Sorry, your browser doesn't support text-to-speech!");
+            return;
+        }
+        if (speechSynthesis.speaking) {
+            speechSynthesis.cancel(); 
+        }
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        if (samanthaVoice) {
+            utterance.voice = samanthaVoice;
+        }
+        utterance.pitch = 1; 
+        utterance.rate = 0.9; 
+        utterance.volume = 1;
+        utterance.onerror = (event) => {
+            console.error("SpeechSynthesisUtterance Error:", event.error);
+            showStatus(formSubmitStatus, `TTS Error: ${event.error}. Ensure audio is enabled.`, 'error', 5000);
+        };
+        speechSynthesis.speak(utterance);
+    }
+
+    // --- Status Message Helper ---
+    function showStatus(element, message, type = 'info', duration = 3000) {
+        element.textContent = message;
+        element.className = `status-message status-${type}`; // Ensure base class is always there
+        element.classList.remove('hidden');
+        setTimeout(() => {
+            element.classList.add('hidden');
+            element.textContent = '';
+        }, duration);
+    }
+    
+    // --- Form Questions Definition ---
+    const formQuestions = [
+        { id: "primaryGoal", num: 1, label: "What is the primary goal of the final prompts you want to create?", placeholder: "e.g., Generate creative story ideas", type: "text", required: true, example: "(e.g., generate stories, write code, summarize text)" },
+        { id: "targetAudience", num: 2, label: "Who is the target audience for the final prompts?", placeholder: "e.g., Marketing professionals", type: "text", example: "(e.g., beginners, experts, children, specific profession)" },
+        { id: "keyElements", num: 3, label: "What key elements or variables should the meta-prompt guide users to include in their prompts?", placeholder: "e.g., tone, length, format, specific keywords", type: "text", example: "(comma-separated)" },
+        { id: "outputFormatMeta", num: 4, label: "What is the desired output format of the meta-prompt itself (how it guides the user)?", placeholder: "e.g., A fill-in-the-blanks template", type: "text", example: "(e.g., list of questions, template, paragraph)" },
+        { id: "constraints", num: 5, label: "Are there any constraints or things to avoid in the final prompts?", placeholder: "e.g., Avoid technical jargon, keep prompts under 50 words", type: "textarea", example: "" },
+        { id: "llmPersona", num: 6, label: "What persona or role should I (the LLM generating the meta-prompt) adopt?", placeholder: "e.g., A creative writing coach", type: "text", example: "(e.g., expert prompt engineer, helpful assistant)" },
+        { id: "includeInteractiveFeatures", num: 7, label: "Should the meta-prompt guide users to request interactive features (like TTS, copy buttons, Q&A log) for their final websites?", type: "select", options: [{value: "yes", text: "Yes"}, {value: "no", text: "No"}], example: "(This will add instructions for those features in the meta-prompt)" }
+    ];
+
+    // --- Dynamically Build Form ---
+    function buildForm() {
+        formQuestions.forEach(q => {
+            const qDiv = document.createElement('div');
+            qDiv.className = 'qna-item';
+
+            let inputHtml = '';
+            if (q.type === 'textarea') {
+                inputHtml = `<textarea id="${q.id}" name="${q.id}" rows="3" class="p-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="${q.placeholder}" ${q.required ? 'required' : ''}></textarea>`;
+            } else if (q.type === 'select') {
+                inputHtml = `<select id="${q.id}" name="${q.id}" class="p-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">`;
+                q.options.forEach(opt => {
+                    inputHtml += `<option value="${opt.value}">${opt.text}</option>`;
+                });
+                inputHtml += `</select>`;
+            } else {
+                inputHtml = `<input id="${q.id}" name="${q.id}" type="text" ${q.required ? 'required' : ''} class="p-2 border rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="${q.placeholder}">`;
+            }
+
+            qDiv.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <label for="${q.id}">${q.num}. ${q.label}</label>
+                    <button type="button" class="speak-question-btn btn btn-secondary btn-small" data-question-id="${q.id}">Speak</button>
+                </div>
+                ${q.example ? `<p class="text-xs text-gray-500 mb-1">${q.example}</p>` : ''}
+                <div class="mt-1 input-container">
+                    <div class="input-with-button">
+                        ${inputHtml}
+                        <button type="button" class="add-answer-btn btn btn-tertiary btn-small" data-question-id="${q.id}" data-question-num="${q.num}">Log Answer</button>
+                    </div>
+                </div>
+            `;
+            metaPromptForm.insertBefore(qDiv, metaPromptForm.lastElementChild); // Insert before submit button
+        });
+
+        // Re-attach event listeners after building form
+        document.querySelectorAll('.speak-question-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const questionId = this.dataset.questionId;
+                const labelElement = document.querySelector(`label[for="${questionId}"]`);
+                if (labelElement) speakText(labelElement.innerText.split('\n')[0]);
+            });
+        });
+
+        document.querySelectorAll('.add-answer-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                addAnswerToLog(this.dataset.questionId, this.dataset.questionNum);
+            });
+        });
+    }
+    
+    // --- Q&A Log Functions ---
+    function addAnswerToLog(questionId, questionNum) {
+        const inputElement = document.getElementById(questionId);
+        const labelElement = document.querySelector(`label[for="${questionId}"]`);
+        
+        if (inputElement && inputElement.value.trim() !== "" && labelElement) {
+            const questionText = labelElement.innerText.split('\n')[0].trim();
+            const answerText = inputElement.value.trim();
+            
+            const existingEntryIndex = qnaLog.findIndex(item => item.questionNumber === questionNum);
+            if (existingEntryIndex > -1) {
+                qnaLog[existingEntryIndex].answer = answerText;
+                showStatus(formSubmitStatus, `Answer for Q${questionNum} updated in log.`, 'success');
+            } else {
+                qnaLog.push({
+                    questionNumber: questionNum,
+                    questionText: questionText,
+                    answer: answerText,
+                    timestamp: new Date().toISOString()
+                });
+                showStatus(formSubmitStatus, `Answer for Q${questionNum} added to log.`, 'success');
+            }
+            console.log("Current Q&A Log:", qnaLog);
+            updateQnaLogDisplay(); // Update display if visible
+        } else {
+            showStatus(formSubmitStatus, `Please enter an answer for Question ${questionNum}.`, 'error');
+        }
+    }
+
+    function updateQnaLogDisplay() {
+        if (qnaLogDisplayArea.classList.contains('hidden')) return;
+
+        let logContent = "--- Meta-Prompt Creator Q&A Log ---\n\n";
+        if (qnaLog.length === 0) {
+            logContent += "No answers logged yet for this session.";
+        } else {
+            qnaLog.sort((a, b) => parseInt(a.questionNumber) - parseInt(b.questionNumber));
+            qnaLog.forEach(item => {
+                logContent += `Timestamp: ${item.timestamp}\n`;
+                logContent += `Q${item.questionNumber}: ${item.questionText}\n`;
+                logContent += `Your Answer: ${item.answer}\n`;
+                logContent += "-----------------------------------\n";
+            });
+        }
+        qnaLogOutput.value = logContent;
+    }
+
+    viewCopyQnaLogButton.addEventListener('click', () => {
+        qnaLogDisplayArea.classList.toggle('hidden');
+        if (!qnaLogDisplayArea.classList.contains('hidden')) {
+            updateQnaLogDisplay();
+            const logText = qnaLogOutput.value;
+            if (logText && qnaLog.length > 0) {
+                copyTextToClipboard(logText, qnaLogCopyStatus, "Q&A Log copied!", "Failed to copy Q&A log.");
+            } else if (qnaLog.length === 0) {
+                showStatus(qnaLogCopyStatus, "Log is empty, nothing to copy.", 'info');
+            }
+        } else {
+            qnaLogCopyStatus.textContent = ""; 
+        }
+    });
+
+    // --- Form Submission & Prompt Generation ---
+    metaPromptForm.addEventListener('submit', function(event) {
+        event.preventDefault(); 
+
+        // Ensure all current form values are in the qnaLog before generating instructions
+        qnaLog = []; // Reset for this specific submission to capture current values
+        formQuestions.forEach(q => {
+            const inputElement = document.getElementById(q.id);
+            if (inputElement && inputElement.value.trim() !== "") {
+                 qnaLog.push({
+                    questionNumber: q.num.toString(),
+                    questionText: q.label,
+                    answer: inputElement.value.trim(),
+                    timestamp: new Date().toISOString()
+                });
+            } else if (q.required) {
+                // If a required field is empty, we might want to stop submission,
+                // but for now, we'll just not log it if it's empty.
+                // The HTML 'required' attribute should handle basic validation.
+            }
+        });
+        
+        if (!document.getElementById('primaryGoal').value.trim()) {
+            showStatus(formSubmitStatus, "Please fill out at least the 'Primary Goal' field.", 'error', 4000);
+            return;
+        }
+
+        const formData = new FormData(metaPromptForm);
+        const primaryGoal = formData.get('primaryGoal') || "User did not specify.";
+        const targetAudience = formData.get('targetAudience') || "User did not specify.";
+        const keyElements = formData.get('keyElements') || "User did not specify; use context.";
+        const outputFormatMeta = formData.get('outputFormatMeta') || "A clear, actionable set of guidelines or a template.";
+        const constraints = formData.get('constraints') || "Only that the final project will need to function as a static website which can be hosted on a service like W3schools.com.";
+        const llmPersona = formData.get('llmPersona') || 'Expert AI Prompt Engineering Assistant';
+        const includeInteractiveFeatures = formData.get('includeInteractiveFeatures') === 'yes';
+
+        let interactiveFeaturesInstructions = "";
+        if (includeInteractiveFeatures) {
+            interactiveFeaturesInstructions = `
+Additionally, the meta-prompt should guide the user to specify if their final website needs the following interactive features:
+- Text-to-speech (TTS) capabilities (e.g., using a 'Samantha' voice) for specific content sections.
+- A 'Copy All Page Text' button.
+- Interactive TTS input fields (top and bottom of page) with 'Speak This Text' buttons.
+- If the final website involves user input or Q&A, a system for logging these interactions with a 'View/Copy Log' button.
+The meta-prompt should ask the user to detail where and how these features should be implemented on their website.
+`;
+        }
+
+        let instructionsForLLM = `As an ${llmPersona}, please generate a comprehensive "meta-prompt" (a copy-pasteable text template or set of guidelines). This meta-prompt will be used by end-users to help them create effective prompts for an AI to generate a static HTML website.
+
+The meta-prompt you create should instruct the end-user to provide details on the following for their desired website:
+
+1.  **Primary Goal of their Website:** (User's input for this was: "${primaryGoal}")
+    * The meta-prompt should ask: "What is the main purpose of your website?"
+
+2.  **Target Audience of their Website:** (User's input for this was: "${targetAudience}")
+    * The meta-prompt should ask: "Who is the target audience for your website?"
+
+3.  **Key Elements/Variables for their Website Content:** (User's input for this was: "${keyElements}")
+    * The meta-prompt should ask: "What specific text, data, image URLs, or other variables must be included? If none, state that the AI should use context and placeholders."
+
+4.  **Desired Structure and Content of their Website:**
+    * The meta-prompt should ask: "What pages or main sections do you need (e.g., Home, About, Services, Contact)?"
+    * The meta-prompt should ask: "For each page/section, what key information or content should be included? (Provide text or describe)"
+
+5.  **Design and Layout Preferences for their Website:**
+    * The meta-prompt should ask: "What overall style are you going for (e.g., minimalist, modern, playful)?"
+    * The meta-prompt should ask: "Do you have any color scheme preferences?"
+    * The meta-prompt should ask: "Any specific layout ideas (e.g., single-page, top navigation)?"
+
+6.  **Functionality (Client-Side Only) for their Website:**
+    * The meta-prompt should ask: "Are there any simple interactive features needed (e.g., contact form using mailto, image gallery)?"
+
+7.  **Technical Output Preferences for the AI building their website:**
+    * The meta-prompt should state: "The AI should provide complete HTML, CSS (preferably Tailwind CSS or inline styles), and client-side JavaScript (if any, in script tags). The code should be well-commented and responsive. The final output should ideally be a single, self-contained HTML file or use common CDNs."
+
+8.  **Constraints & Things to Avoid for their Website:** (User's input for this was: "${constraints}")
+    * The meta-prompt must reiterate: "The website must function as a static website, hostable on services like W3Schools.com or GitHub Pages. No server-side languages or complex backend databases unless achievable via client-side means or simple third-party embeds explicitly requested."
+    * The meta-prompt should ask: "Are there any other specific design or content elements to avoid?"
+
+${interactiveFeaturesInstructions}
+
+The meta-prompt you generate should be in the format of: "${outputFormatMeta}". It must be clear, actionable, and easy for the end-user to copy, fill out, and provide to an AI to get their website built.
+`;
+
+            promptTextElement.textContent = instructionsForLLM.trim();
+            generatedPromptOutput.classList.remove('hidden');
+            copyGeneratedInstructionsButton.classList.remove('hidden');
+            showStatus(formSubmitStatus, "Meta-prompt instructions generated successfully!", 'success');
+        });
+
+        // --- Copy Button for Generated Instructions ---
+        copyGeneratedInstructionsButton.addEventListener('click', function() {
+            const textToCopy = promptTextElement.textContent;
+            copyTextToClipboard(textToCopy, pageCopyStatus, "Generated instructions copied!", "Failed to copy instructions.");
+        });
+        
+        // --- Speak Generated Instructions ---
+        speakGeneratedInstructionsButton.addEventListener('click', () => {
+            const text = promptTextElement.textContent;
+            if (text.trim()) speakText(text);
+        });
+
+        // --- General Text-to-Speech Field Handlers ---
+        if (speakTopButton && ttsInputTop) {
+            speakTopButton.addEventListener('click', () => {
+                const text = ttsInputTop.value;
+                if (text.trim()) speakText(text);
+                else showStatus(pageCopyStatus, "Please type some text into the top field first!", 'info');
+            });
+        }
+        if (speakBottomButton && ttsInputBottom) {
+            speakBottomButton.addEventListener('click', () => {
+                const text = ttsInputBottom.value;
+                if (text.trim()) speakText(text);
+                else showStatus(pageCopyStatus, "Please type some text into the bottom field first!", 'info');
+            });
+        }
+
+        /**
+         * Generic copy to clipboard function with status updates.
+         * @param {string} textToCopy - The text to be copied.
+         * @param {HTMLElement} statusElement - The HTML element to display status messages.
+         * @param {string} successMessage - Message on successful copy.
+         * @param {string} errorMessage - Message on copy failure.
+         */
+        function copyTextToClipboard(textToCopy, statusElement, successMessage, errorMessage) {
+            if (!textToCopy) {
+                showStatus(statusElement, "Nothing to copy.", 'info');
+                return;
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    showStatus(statusElement, successMessage, 'success');
+                }).catch(err => {
+                    console.error('Primary clipboard writeText failed: ', err.message);
+                    try { // Fallback
+                        const textArea = document.createElement("textarea");
+                        textArea.value = textToCopy;
+                        textArea.style.position = "fixed"; document.body.appendChild(textArea);
+                        textArea.focus(); textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                        showStatus(statusElement, `${successMessage} (fallback)`, 'success');
+                    } catch (execErr) {
+                        console.error('Fallback copy failed: ', execErr);
+                        showStatus(statusElement, `${errorMessage} Please copy manually.`, 'error', 5000);
+                    }
+                });
+            } else { // Fallback if navigator.clipboard itself isn't available
+                 try {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = textToCopy;
+                    textArea.style.position = "fixed"; document.body.appendChild(textArea);
+                    textArea.focus(); textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    showStatus(statusElement, `${successMessage} (fallback)`, 'success');
+                } catch (execErr) {
+                    console.error('Fallback copy failed: ', execErr);
+                    showStatus(statusElement, `${errorMessage} Please copy manually.`, 'error', 5000);
+                }
+            }
+        }
+        
+        // --- Initial Setup ---
+        window.addEventListener('DOMContentLoaded', () => {
+            buildForm(); // Dynamically create the form questions
+            loadVoices(); 
+        });
+
+    </script>
+</body>
+</html>
