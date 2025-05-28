@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Q&A Form Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .log-entry {
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            word-break: break-all;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .qa-item {
+            background-color: #f9fafb; /* bg-gray-50 */
+            padding: 1rem;
+            border-radius: 0.5rem; /* rounded-lg */
+            margin-bottom: 1rem;
+            border: 1px solid #e5e7eb; /* border-gray-200 */
+        }
+        .qa-question-text {
+            font-weight: 600; /* font-semibold */
+            color: #4b5563; /* text-gray-600 */
+            white-space: pre-wrap; /* Allow newlines in question text to render */
+        }
+        .answer-input {
+            width: calc(100% - 100px); /* Adjust based on button width */
+        }
+         /* Disabled look for answer input */
+        .answer-input:disabled {
+            background-color: #e5e7eb; /* bg-gray-200 */
+            color: #6b7280; /* text-gray-500 */
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 p-4 md:p-8">
+
+    <div class="container mx-auto max-w-4xl bg-white shadow-xl rounded-lg p-6">
+        <h1 class="text-3xl font-bold text-center text-indigo-700 mb-8">Dynamic Q&A Form Generator</h1>
+
+        <section class="mb-6 p-4 bg-sky-50 rounded-lg shadow-sm">
+            <label for="topCustomText" class="block text-sm font-medium text-gray-700 mb-1">Read Custom Text (Top):</label>
+            <div class="flex">
+                <input type="text" id="topCustomText" class="flex-grow p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter text to read aloud...">
+                <button id="readTopCustomTextBtn" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-r-md flex items-center">
+                    <i class="fas fa-volume-up mr-2"></i> Read
+                </button>
+            </div>
+        </section>
+
+        <section id="questionInputSection" class="mb-10 p-6 bg-indigo-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold text-indigo-600 mb-4">1. Paste Your Numbered Questions</h2>
+            <p class="text-sm text-gray-600 mb-3">
+                Each question **must** start with a number followed by a period or parenthesis (e.g., "1. What is...?", "2) How does...?"). Paste 1 to 50 questions. Multi-line questions are supported (additional lines will be appended to the current numbered question).
+            </p>
+            <textarea id="questionsInputArea" class="w-full h-48 p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="IMPORTANT: Number each question!&#10;Example:&#10;1. What is the capital of France?&#10;This is a second line for the first question.&#10;&#10;2. Explain the theory of relativity in simple terms.&#10;3) Who painted the Mona Lisa?"></textarea>
+            <button id="generateQABtn" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-2 rounded-md shadow-md flex items-center">
+                <i class="fas fa-cogs mr-2"></i> Generate Q&A Form
+            </button>
+        </section>
+
+        <section id="generatedQAContainer" class="hidden">
+            </section>
+
+        <section id="logSection" class="mt-10 p-6 bg-gray-50 rounded-lg shadow">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-xl font-medium text-gray-700">Activity Log (Form & Q&A):</h3>
+                <div>
+                    <button id="toggleLogBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 rounded-md text-xs mr-1">View Log</button>
+                    <button id="copyLogBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md text-xs">Copy Log</button>
+                </div>
+            </div>
+            <div id="logContainer" class="hidden bg-white p-3 rounded-md border border-gray-300 h-40 overflow-y-auto text-xs">
+                <p class="text-gray-500 italic">Log is empty.</p>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">User ID: <span id="userIdDisplay">Initializing...</span></p>
+        </section>
+
+         <section class="mt-6 p-4 bg-sky-50 rounded-lg shadow-sm">
+            <label for="bottomCustomText" class="block text-sm font-medium text-gray-700 mb-1">Read Custom Text (Bottom):</label>
+            <div class="flex">
+                <input type="text" id="bottomCustomText" class="flex-grow p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter text to read aloud...">
+                <button id="readBottomCustomTextBtn" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-r-md flex items-center">
+                    <i class="fas fa-volume-up mr-2"></i> Read
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <div id="messageModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-50">
+        <div class="bg-white p-5 rounded-lg shadow-xl max-w-sm w-full mx-4">
+            <div id="modalContent" class="text-center">
+                <p id="messageModalText" class="text-lg font-medium text-gray-700 mb-4"></p>
+                <div id="modalButtons">
+                    <button id="messageModalConfirmBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded mr-2 hidden">Confirm</button>
+                    <button id="messageModalCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded mr-2 hidden">Cancel</button>
+                    <button id="messageModalCloseBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : `qa-form-generator-${Date.now()}`;
+
+        let fbApp, fbAuth, fbDb, userId, logCollectionRef;
+        let isAuthReady = false;
+
+        const questionsInputArea = document.getElementById('questionsInputArea');
+        const generateQABtn = document.getElementById('generateQABtn');
+        const generatedQAContainer = document.getElementById('generatedQAContainer');
+        const logContainer = document.getElementById('logContainer');
+        const toggleLogBtn = document.getElementById('toggleLogBtn');
+        const copyLogBtn = document.getElementById('copyLogBtn');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const topCustomTextInput = document.getElementById('topCustomText');
+        const readTopCustomTextBtn = document.getElementById('readTopCustomTextBtn');
+        const bottomCustomTextInput = document.getElementById('bottomCustomText');
+        const readBottomCustomTextBtn = document.getElementById('readBottomCustomTextBtn');
+        
+        const messageModal = document.getElementById('messageModal');
+        const messageModalText = document.getElementById('messageModalText');
+        const messageModalConfirmBtn = document.getElementById('messageModalConfirmBtn');
+        const messageModalCancelBtn = document.getElementById('messageModalCancelBtn');
+        const messageModalCloseBtn = document.getElementById('messageModalCloseBtn');
+        let currentConfirmCallback = null;
+
+        let currentUtterance = null;
+        let preferredVoice = null;
+        let voices = [];
+        let voiceLoadAttempted = false;
+        let voiceListLogged = false;
+
+        let qaData = []; 
+
+        function showModal(message, type = 'info', callback = null) {
+            messageModalText.textContent = message;
+            messageModalConfirmBtn.classList.add('hidden');
+            messageModalCancelBtn.classList.add('hidden');
+            messageModalCloseBtn.classList.remove('hidden');
+            currentConfirmCallback = null;
+
+            if (type === 'confirm') {
+                messageModalConfirmBtn.classList.remove('hidden');
+                messageModalCancelBtn.classList.remove('hidden');
+                messageModalCloseBtn.classList.add('hidden');
+                currentConfirmCallback = callback;
+            }
+            messageModal.classList.remove('hidden');
+        }
+        messageModalCloseBtn.addEventListener('click', () => messageModal.classList.add('hidden'));
+        messageModalCancelBtn.addEventListener('click', () => messageModal.classList.add('hidden'));
+        messageModalConfirmBtn.addEventListener('click', () => {
+            messageModal.classList.add('hidden');
+            if (currentConfirmCallback) currentConfirmCallback(true);
+        });
+
+        async function addLogEntry(type, data) {
+            if (!isAuthReady || !fbDb || !userId) {
+                console.warn("Firestore not ready, logging to console:", { type, ...data });
+                return;
+            }
+            const logEntry = { userId, appId, timestamp: serverTimestamp(), type, userAgent: navigator.userAgent, details: data };
+            try {
+                if (!logCollectionRef) { console.error("logCollectionRef not initialized."); return; }
+                await addDoc(logCollectionRef, logEntry);
+            } catch (error) { console.error("Error adding log entry:", error); }
+        }
+
+        window.onerror = function(message, source, lineno, colno, error) {
+            addLogEntry('js_error', { message, source, lineno, colno, error: error ? error.stack || error.toString() : 'N/A' });
+            return false;
+        };
+        
+        async function initializeFirebase() {
+             if (!firebaseConfig) {
+                addLogEntry('system_error', { message: "Firebase config unavailable." });
+                userIdDisplay.textContent = "Config Error"; return;
+            }
+            try {
+                fbApp = initializeApp(firebaseConfig, appId + "_instance_" + Date.now()); 
+                fbAuth = getAuth(fbApp);
+                fbDb = getFirestore(fbApp);
+                if (typeof setLogLevel === 'function') setLogLevel('debug');
+
+                onAuthStateChanged(fbAuth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = userId;
+                        logCollectionRef = collection(fbDb, `artifacts/${appId}/users/${userId}/activityLog`);
+                        isAuthReady = true;
+                        addLogEntry('auth_state', { status: 'authenticated', userId });
+                        loadLog();
+                    } else {
+                        userId = null; isAuthReady = false;
+                        addLogEntry('auth_state', { status: 'unauthenticated' });
+                        userIdDisplay.textContent = "Not signed in";
+                    }
+                });
+
+                if (fbAuth.currentUser) {}
+                else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(fbAuth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(fbAuth);
+                }
+            } catch (error) {
+                addLogEntry('system_error', { message: "Firebase init/auth error", error: error.toString() });
+                userIdDisplay.textContent = "Auth Error";
+            }
+        }
+
+        function renderLog(logEntries) {
+            if (!logContainer) return;
+            logContainer.innerHTML = logEntries.length === 0 ? '<p class="text-gray-500 italic">Log is empty.</p>' : '';
+            logEntries.forEach(entry => {
+                const entryDiv = document.createElement('div');
+                entryDiv.classList.add('log-entry');
+                let content = `<span class="font-semibold">${entry.type.toUpperCase()}</span> (${new Date(entry.timestamp?.toDate?.() || Date.now()).toLocaleString()}): `;
+                content += JSON.stringify(entry.details).substring(0, 200) + (JSON.stringify(entry.details).length > 200 ? "..." : "");
+                entryDiv.innerHTML = content;
+                logContainer.prepend(entryDiv);
+            });
+        }
+        function loadLog() {
+            if (!isAuthReady || !logCollectionRef) return;
+            onSnapshot(query(logCollectionRef), (snapshot) => {
+                const entries = [];
+                snapshot.forEach(doc => entries.push({ id: doc.id, ...doc.data() }));
+                entries.sort((a, b) => (b.timestamp?.toDate?.() || 0) - (a.timestamp?.toDate?.() || 0));
+                renderLog(entries);
+            }, error => {
+                addLogEntry('system_error', { message: 'Error fetching log', error: error.toString() });
+            });
+        }
+        toggleLogBtn.addEventListener('click', () => { 
+            logContainer.classList.toggle('hidden');
+            toggleLogBtn.textContent = logContainer.classList.contains('hidden') ? 'View Log' : 'Hide Log';
+            addLogEntry('ui_interaction', { action: 'toggle_log', visible: !logContainer.classList.contains('hidden') });
+        });
+        copyLogBtn.addEventListener('click', () => { 
+            const logText = Array.from(logContainer.querySelectorAll('.log-entry')).map(e => e.textContent).join('\n');
+            if (logText) {
+                const textarea = document.createElement('textarea');
+                textarea.value = logText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try { document.execCommand('copy'); showModal('Log copied!'); } 
+                catch (err) { showModal('Failed to copy log.'); addLogEntry('ui_error', {action: 'copy_log_failed', error: err.toString()}); }
+                document.body.removeChild(textarea);
+            } else { showModal('Log is empty.'); }
+            addLogEntry('ui_interaction', { action: 'copy_log_attempt' });
+        });
+
+        function populateVoiceList() {
+            voiceLoadAttempted = true;
+            if (typeof speechSynthesis === 'undefined') {
+                addLogEntry('tts_setup', { status: 'error', message: 'SpeechSynthesis API not supported.' });
+                return;
+            }
+            voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                const samanthaSearchTerms = ['samantha', 'microsoft samantha', 'samantha mobile', 'samantha desktop', 'female united states', 'english united states female', 'microsoft zira', 'google us english'];
+                preferredVoice = voices.find(voice => samanthaSearchTerms.some(term => voice.name.toLowerCase().includes(term.toLowerCase())));
+                if (!preferredVoice && voices.some(v => v.name.toLowerCase().includes('samantha'))) { 
+                    preferredVoice = voices.find(v => v.name.toLowerCase().includes('samantha'));
+                }
+
+                if (preferredVoice) {
+                    addLogEntry('tts_setup', { status: 'success', voiceSelected: preferredVoice.name, lang: preferredVoice.lang });
+                } else if (!voiceListLogged) {
+                    addLogEntry('tts_setup', { status: 'info', message: "Preferred voice 'Samantha' or common US English female not found. Using system default.", availableVoices: voices.map(v => ({name: v.name, lang: v.lang, default: v.default})) });
+                    voiceListLogged = true;
+                }
+            } else {
+                addLogEntry('tts_setup', { status: 'info', message: 'No voices from getVoices() at this call.' });
+            }
+        }
+        if (typeof speechSynthesis !== 'undefined') {
+            if (speechSynthesis.getVoices().length === 0 && speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = () => { if (!voiceLoadAttempted || voices.length === 0) populateVoiceList(); };
+            } else { populateVoiceList(); }
+        } else { addLogEntry('tts_setup', { status: 'error', message: 'SpeechSynthesis API not supported at all.' });}
+
+        function stopTTS() {
+            addLogEntry('tts_action', { action: 'stopTTS_called', speakingBefore: speechSynthesis.speaking });
+            if ('speechSynthesis' in window) {
+                if (currentUtterance) { currentUtterance.onend = null; currentUtterance.onerror = null; }
+                speechSynthesis.cancel();
+                currentUtterance = null;
+            }
+        }
+
+        function speakText(text, onEndCallback = null) {
+            stopTTS(); 
+            addLogEntry('tts_action', { action: 'speakText_called', textLen: text.length, currentUtteranceBeforeNew: !!currentUtterance });
+            if (!('speechSynthesis' in window)) { if (onEndCallback) onEndCallback(true); return; }
+
+            setTimeout(() => {
+                const speechState = { speaking: speechSynthesis.speaking, pending: speechSynthesis.pending };
+                addLogEntry('tts_pre_speak_check', speechState);
+                if (speechState.speaking || speechState.pending) {
+                    addLogEntry('tts_warning', {message: "Still active before new speak. Forcing another cancel.", state: speechState});
+                    speechSynthesis.cancel(); 
+                }
+
+                const newUtterance = new SpeechSynthesisUtterance(text);
+                if (preferredVoice) newUtterance.voice = preferredVoice;
+                currentUtterance = newUtterance;
+
+                newUtterance.onend = (event) => {
+                    if (newUtterance === currentUtterance) { 
+                        addLogEntry('tts_event', {event: 'onend', text: text.substring(0,30)});
+                        currentUtterance = null; 
+                        if (onEndCallback) onEndCallback(false);
+                    }
+                };
+                newUtterance.onerror = (event) => {
+                    const errorType = event.error || 'unknown_error'; 
+                    if (newUtterance === currentUtterance) {
+                        addLogEntry('tts_error', { errorCode: errorType, message: `Error during speech: ${errorType}`, textAttemptedLen: text.length, voiceUsed: newUtterance.voice ? newUtterance.voice.name : 'default' });
+                        if (errorType !== 'interrupted' && errorType !== 'canceled') showModal(`Speech error: ${errorType}.`);
+                        currentUtterance = null; 
+                        if (onEndCallback) onEndCallback(true);
+                    }
+                };
+                try { 
+                    speechSynthesis.speak(newUtterance);
+                    addLogEntry('tts_action', {action: 'speechSynthesis_speak_called', textLen: text.length, voice: newUtterance.voice ? newUtterance.voice.name : 'default'});
+                } 
+                catch (e) { 
+                    addLogEntry('tts_error', { trigger: 'speak_call_exception', message: e.toString() });
+                    if (newUtterance === currentUtterance) currentUtterance = null;
+                    if (onEndCallback) onEndCallback(true);
+                }
+            }, 250);
+        }
+        
+        readTopCustomTextBtn.addEventListener('click', () => {
+            const text = topCustomTextInput.value.trim();
+            addLogEntry('custom_tts_attempt', { inputField: 'top', textLen: text.length });
+            if (text) speakText(text); else showModal("Enter text for top TTS.");
+        });
+        readBottomCustomTextBtn.addEventListener('click', () => {
+            const text = bottomCustomTextInput.value.trim();
+            addLogEntry('custom_tts_attempt', { inputField: 'bottom', textLen: text.length });
+            if (text) speakText(text); else showModal("Enter text for bottom TTS.");
+        });
+
+        generateQABtn.addEventListener('click', () => {
+            addLogEntry('qa_form_action', { action: 'generate_form_clicked' });
+            const inputText = questionsInputArea.value.trim();
+            if (!inputText) {
+                showModal("Please paste some questions.");
+                addLogEntry('qa_form_validation', { error: 'No input text for questions.' });
+                return;
+            }
+            const parsedQs = parseQuestions(inputText); 
+            if (parsedQs.length === 0) { // Check specifically if zero questions were parsed
+                showModal("No questions were parsed. Please ensure each question starts with a number (e.g., '1. What is...?') and check the log for parsing details.");
+                // The detailed log entry about zero questions is now inside parseQuestions
+                return;
+            }
+            if (parsedQs.length > 50) {
+                 showModal("Please provide no more than 50 questions.");
+                 addLogEntry('qa_form_validation', { error: 'Too many questions.', count: parsedQs.length });
+                 return;
+            }
+            
+            qaData = parsedQs.map(q => ({ ...q, answerText: '', isAnswerSaved: false }));
+            addLogEntry('qa_form_action', { action: 'questions_parsed_successfully', count: qaData.length });
+            renderQAGeneratedForm();
+            generatedQAContainer.classList.remove('hidden');
+            generatedQAContainer.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        function parseQuestions(text) {
+            addLogEntry('qa_form_parsing_start', { inputTextSample: text.substring(0, 200) });
+            const questions = [];
+            const lines = text.split('\n');
+            let currentQuestionObject = null;
+            let questionCounterForId = 0; 
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmedLine = line.trim();
+                
+                // More flexible regex: optional leading spaces, number, optional space, dot or paren, optional space, text
+                const match = trimmedLine.match(/^\s*(\d+)\s*[\.\)]\s*(.*)/);
+                
+                // Log every line being processed for easier debugging
+                addLogEntry('qa_form_parsing_line_check', { 
+                    lineNumber: i + 1, 
+                    lineContent: trimmedLine.substring(0, 100), // Log sample of the line
+                    isMatch: !!match // Log if regex matched
+                });
+
+                if (match && match[1] && match[2] !== undefined) { 
+                    questionCounterForId++;
+                    if (currentQuestionObject) { 
+                        currentQuestionObject.questionText = currentQuestionObject.questionText.trim(); 
+                        questions.push(currentQuestionObject);
+                    }
+                    
+                    currentQuestionObject = {
+                        id: `q${questionCounterForId}-${Date.now()}`,
+                        originalNumber: parseInt(match[1], 10),
+                        questionText: match[2].trim() 
+                    };
+                    addLogEntry('qa_form_parsing_new_question', { 
+                        lineNumber: i + 1, 
+                        parsedNum: currentQuestionObject.originalNumber, 
+                        questionStartText: currentQuestionObject.questionText.substring(0, 50) 
+                    });
+
+                } else if (currentQuestionObject && trimmedLine.length > 0) {
+                    currentQuestionObject.questionText += (currentQuestionObject.questionText.length > 0 ? '\n' : '') + trimmedLine;
+                    addLogEntry('qa_form_parsing_continuation', { 
+                        lineNumber: i + 1, 
+                        appendedText: trimmedLine.substring(0,50), 
+                        toQuestionId: currentQuestionObject.id 
+                    });
+                } else if (currentQuestionObject && trimmedLine.length === 0 && currentQuestionObject.questionText.length > 0 && !currentQuestionObject.questionText.endsWith('\n\n')) {
+                    currentQuestionObject.questionText += '\n';
+                } else if (trimmedLine.length > 0) {
+                    addLogEntry('qa_form_parsing_orphan_line_detail', { 
+                        lineNumber: i + 1, 
+                        text: trimmedLine.substring(0,100),
+                        reason: currentQuestionObject ? "Not a continuation of current Q" : "No current Q and not a new Q start"
+                    });
+                }
+            }
+
+            if (currentQuestionObject) { 
+                currentQuestionObject.questionText = currentQuestionObject.questionText.trim();
+                questions.push(currentQuestionObject);
+            }
+            
+            const filteredQuestions = questions.filter(q => q.questionText); 
+            if (filteredQuestions.length === 0 && text.trim().length > 0) {
+                addLogEntry('qa_form_parsing_zero_results', { message: "Parsing completed, but 0 questions were extracted. Input text was present. Please check numbering format (e.g., '1. Question text')." });
+            } else {
+                addLogEntry('qa_form_parsing_end', { parsedCount: questions.length, finalCount: filteredQuestions.length, sample: filteredQuestions.slice(0,1).map(q=> ({num: q.originalNumber, text: q.questionText.substring(0,30)})) });
+            }
+            return filteredQuestions;
+        }
+
+
+        function renderQAGeneratedForm() {
+            generatedQAContainer.innerHTML = '<h2 class="text-2xl font-semibold text-indigo-600 mb-4">2. Answer Questions</h2>'; 
+            qaData.forEach((item, index) => {
+                const qaItemDiv = document.createElement('div');
+                qaItemDiv.className = 'qa-item';
+                qaItemDiv.id = `qa-item-${item.id}`;
+                qaItemDiv.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="qa-question-text">${item.originalNumber}. ${item.questionText}</p>
+                        <button class="read-question-btn text-sky-500 hover:text-sky-700 p-1" data-question-id="${item.id}" title="Read question">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center mt-1">
+                        <textarea id="answer-input-${item.id}" class="answer-input p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500" rows="2" placeholder="Type your answer here..." ${item.isAnswerSaved ? 'disabled' : ''}>${item.answerText || ''}</textarea>
+                        <button class="save-answer-btn bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-r-md ml-0" data-question-id="${item.id}" style="height: 54px; line-height: 38px;">
+                            ${item.isAnswerSaved ? 'Unsave' : 'Save'}
+                        </button>
+                    </div>
+                `;
+                generatedQAContainer.appendChild(qaItemDiv);
+
+                qaItemDiv.querySelector('.read-question-btn').addEventListener('click', (e) => {
+                    const qId = e.currentTarget.dataset.questionId;
+                    const questionItem = qaData.find(q => q.id === qId);
+                    if (questionItem) {
+                        addLogEntry('qa_tts_question', { questionId: qId, questionText: questionItem.questionText.substring(0,50) });
+                        speakText(questionItem.questionText);
+                    }
+                });
+                qaItemDiv.querySelector('.save-answer-btn').addEventListener('click', handleSaveUnsaveAnswer);
+            });
+        }
+
+        function handleSaveUnsaveAnswer(event) {
+            const button = event.currentTarget;
+            const questionId = button.dataset.questionId;
+            const qaItemIndex = qaData.findIndex(q => q.id === questionId);
+            if (qaItemIndex === -1) return;
+            const qaItem = qaData[qaItemIndex];
+            const answerInput = document.getElementById(`answer-input-${questionId}`);
+
+            addLogEntry('qa_form_interaction', {action: qaItem.isAnswerSaved ? 'unsave_clicked' : 'save_clicked', questionId: qaItem.id});
+
+            if (qaItem.isAnswerSaved) { 
+                showModal("Unsave this answer and allow editing?", "confirm", (confirmed) => {
+                    if (confirmed) {
+                        addLogEntry('qa_answer_unsaved', { questionId: qaItem.id, questionNum: qaItem.originalNumber, question: qaItem.questionText.substring(0,50), oldAnswer: qaItem.answerText.substring(0,50) });
+                        qaData[qaItemIndex].isAnswerSaved = false;
+                        answerInput.disabled = false;
+                        answerInput.value = qaData[qaItemIndex].answerText; 
+                        button.textContent = 'Save';
+                        button.classList.replace('bg-red-500', 'bg-blue-500');
+                        button.classList.replace('hover:bg-red-600', 'hover:bg-blue-600');
+                    }
+                });
+            } else { 
+                const answerText = answerInput.value.trim();
+                if (!answerText) {
+                    showModal("Please enter an answer before saving."); return;
+                }
+                qaData[qaItemIndex].answerText = answerText;
+                qaData[qaItemIndex].isAnswerSaved = true;
+                addLogEntry('qa_answer_saved', { questionId: qaItem.id, questionNum: qaItem.originalNumber, question: qaItem.questionText.substring(0,50), answer: answerText.substring(0,50) });
+                answerInput.disabled = true;
+                button.textContent = 'Unsave';
+                button.classList.replace('bg-blue-500', 'bg-red-500');
+                button.classList.replace('hover:bg-blue-600', 'hover:bg-red-600');
+                showModal("Answer saved!");
+            }
+        }
+        
+        window.onload = async () => {
+            await initializeFirebase();
+            setTimeout(populateVoiceList, 1200); 
+        };
+
+    </script>
+</body>
+</html>
