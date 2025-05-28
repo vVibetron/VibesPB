@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Aggregator</title>a
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .log-entry {
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .star { cursor: pointer; color: #d1d5db; }
+        .star.rated, .star:hover, .star.hovered-effect { color: #f59e0b; } /* Combined hover and rated */
+        .current-story-highlight {
+            background-color: #e0f2fe; /* Light blue highlight */
+            border-left: 4px solid #0ea5e9; /* Blue left border */
+        }
+        .story-meta {
+            font-size: 0.8rem;
+            color: #6b7280; /* text-gray-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 p-4 md:p-8">
+
+    <div class="container mx-auto max-w-6xl bg-white shadow-xl rounded-lg p-6">
+
+        <header class="mb-6 pb-6 border-b border-gray-200">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                <div class="w-full md:w-1/3 mb-4 md:mb-0 md:mr-4">
+                    <label for="customTextTop" class="block text-sm font-medium text-gray-700 mb-1">Read Custom Text:</label>
+                    <div class="flex">
+                        <input type="text" id="customTextTop" class="flex-grow p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter text to read">
+                        <button id="readCustomTextTopBtn" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-r-md flex items-center">
+                            <i class="fas fa-volume-up mr-2"></i> Read
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-2 mb-4 md:mb-0">
+                    <button id="replayPrevBtn" title="Replay Current / Previous (double click)" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md flex items-center">
+                        <i class="fas fa-backward"></i>
+                    </button>
+                    <button id="playPauseBtn" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-md w-32 flex items-center justify-center">
+                        <i class="fas fa-play mr-2"></i> Play All
+                    </button>
+                    <button id="nextBtn" title="Next Story" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md flex items-center">
+                        <i class="fas fa-forward"></i>
+                    </button>
+                </div>
+
+                <div class="w-full md:w-1/3 relative md:ml-4">
+                    <div class="flex justify-end mb-2 space-x-2">
+                        <button id="toggleLogBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-md text-sm">View Log</button>
+                        <button id="copyLogBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md text-sm">Copy Log</button>
+                    </div>
+                    <div id="logContainer" class="hidden bg-gray-50 p-3 rounded-md border border-gray-300 h-40 overflow-y-auto text-xs">
+                        <p class="text-gray-500 italic">Log is empty.</p>
+                    </div>
+                     <p class="text-xs text-gray-500 mt-1">User ID: <span id="userIdDisplay">Initializing...</span></p>
+                </div>
+            </div>
+        </header>
+
+        <main id="newsContainer" class="space-y-8">
+            </main>
+
+        <footer class="mt-8 pt-6 border-t border-gray-200">
+            <div class="mb-6">
+                <label for="personalThoughts" class="block text-sm font-medium text-gray-700 mb-1">Personal Thoughts:</label>
+                <div class="flex">
+                    <input type="text" id="personalThoughts" class="flex-grow p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Add your thoughts...">
+                    <button id="saveThoughtsBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-r-md flex items-center">
+                        <i class="fas fa-save mr-2"></i> Save
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label for="customTextBottom" class="block text-sm font-medium text-gray-700 mb-1">Read Custom Text:</label>
+                <div class="flex">
+                    <input type="text" id="customTextBottom" class="flex-grow p-2 border border-gray-300 rounded-l-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter text to read">
+                    <button id="readCustomTextBottomBtn" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-r-md flex items-center">
+                        <i class="fas fa-volume-up mr-2"></i> Read
+                    </button>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <div id="messageModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-50">
+        <div class="bg-white p-5 rounded-lg shadow-xl max-w-sm w-full mx-4">
+            <div class="text-center">
+                <p id="messageModalText" class="text-lg font-medium text-gray-700 mb-4"></p>
+                <button id="messageModalCloseBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // Firebase imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, onSnapshot, doc, setDoc, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase configuration and App ID
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let app;
+        let auth;
+        let db;
+        let userId;
+        let feedbackLogCollectionRef;
+        let isAuthReady = false;
+
+        // --- UI Elements ---
+        const newsContainer = document.getElementById('newsContainer');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const replayPrevBtn = document.getElementById('replayPrevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const customTextTopInput = document.getElementById('customTextTop');
+        const readCustomTextTopBtn = document.getElementById('readCustomTextTopBtn');
+        const customTextBottomInput = document.getElementById('customTextBottom');
+        const readCustomTextBottomBtn = document.getElementById('readCustomTextBottomBtn');
+        const personalThoughtsInput = document.getElementById('personalThoughts');
+        const saveThoughtsBtn = document.getElementById('saveThoughtsBtn');
+        const logContainer = document.getElementById('logContainer');
+        const toggleLogBtn = document.getElementById('toggleLogBtn');
+        const copyLogBtn = document.getElementById('copyLogBtn');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+
+        const messageModal = document.getElementById('messageModal');
+        const messageModalText = document.getElementById('messageModalText');
+        const messageModalCloseBtn = document.getElementById('messageModalCloseBtn');
+
+        function showModal(message) {
+            messageModalText.textContent = message;
+            messageModal.classList.remove('hidden');
+        }
+        messageModalCloseBtn.addEventListener('click', () => messageModal.classList.add('hidden'));
+
+
+        // --- TTS State ---
+        let currentStoryIndex = 0; 
+        let isPlayingAll = false;  
+        let isPaused = false;      
+        let currentUtterance = null; // Holds the current SpeechSynthesisUtterance object
+        let lastReplayClickTime = 0;
+        let currentlyHighlightedStoryId = null; 
+        let preferredVoice = null;
+        let voices = []; 
+        let voiceLoadAttempted = false;
+        let voiceListLogged = false; // To ensure voice list is logged only once if needed
+
+
+        // --- Placeholder News Data (with date and source) ---
+        const newsStories = [
+            { id: "story1", title: "Global Summit Addresses Climate Change", summary: "Leaders from around the world convened to discuss urgent actions needed to combat rising global temperatures and environmental concerns.", publicationDate: "2024-05-27", source: "Global News Network" },
+            { id: "story2", title: "Tech Giant Unveils New AI Breakthrough", summary: "A major technology company today announced a revolutionary AI model expected to transform various industries.", publicationDate: "2024-05-27", source: "Tech Chronicle" },
+            { id: "story3", title: "Space Exploration Mission Reaches New Milestone", summary: "The latest Mars rover has successfully collected its first samples, marking a significant step in the search for extraterrestrial life.", publicationDate: "2024-05-26", source: "Cosmic Times" },
+            { id: "story4", title: "Economic Outlook: Inflation Concerns Persist", summary: "Economists warn that inflationary pressures may continue to impact global markets in the coming months.", publicationDate: "2024-05-27", source: "Financial Times" },
+            { id: "story5", title: "Healthcare Advances Offer Hope for Rare Diseases", summary: "New research into gene therapy shows promising results for treating previously incurable genetic disorders.", publicationDate: "2024-05-25", source: "Medical Journal Today" },
+            { id: "story6", title: "Local Community Organizes Charity Drive", summary: "Residents came together to support families in need, collecting food and supplies for the local shelter.", publicationDate: "2024-05-26", source: "Community Herald" },
+            { id: "story7", title: "Sports Championship Ends in Dramatic Fashion", summary: "The final game of the season saw an unexpected upset, with the underdog team claiming victory in the last seconds.", publicationDate: "2024-05-27", source: "Sports Illustrated" },
+            { id: "story8", title: "Advancements in Renewable Energy Technology", summary: "Scientists have developed more efficient solar panels that could significantly boost clean energy production.", publicationDate: "2024-05-25", source: "GreenTech Today" },
+            { id: "story9", title: "Cultural Festival Celebrates Diversity", summary: "A vibrant festival showcasing music, dance, and art from various cultures attracted thousands of attendees.", publicationDate: "2024-05-26", source: "Arts & Culture Weekly" },
+            { id: "story10", title: "Cybersecurity Alert: New Phishing Scam Detected", summary: "Experts urge caution as a sophisticated phishing campaign targets users through email and text messages.", publicationDate: "2024-05-27", source: "SecureNet News" }
+        ];
+
+        // --- Log Functions (Enhanced) ---
+        async function addLogEntry(type, data) {
+            if (!isAuthReady || !db || !userId) { 
+                console.warn("Firestore not ready or user not authenticated, logging to console only:", { type, ...data });
+                return;
+            }
+
+            const logEntry = {
+                userId: userId, 
+                appId: appId,
+                timestamp: serverTimestamp(),
+                type: type,
+                userAgent: navigator.userAgent, 
+                details: data 
+            };
+
+            try {
+                if (!feedbackLogCollectionRef) { 
+                     console.error("feedbackLogCollectionRef is not initialized. Cannot save log:", logEntry);
+                     return;
+                }
+                await addDoc(feedbackLogCollectionRef, logEntry);
+                console.log("Log entry added to Firestore:", logEntry);
+            } catch (error) {
+                console.error("Error adding log entry to Firestore:", error, "Original log data:", logEntry);
+            }
+        }
+        
+        // --- Global Error Handler ---
+        window.onerror = function(message, source, lineno, colno, error) {
+            console.error("Global error caught:", message, source, lineno, colno, error);
+            addLogEntry('error', {
+                message: message,
+                source: source,
+                lineno: lineno,
+                colno: colno,
+                error: error ? error.stack || error.toString() : 'N/A'
+            });
+            return false; 
+        };
+
+
+        // --- Firebase Initialization and Auth ---
+        async function initializeFirebase() {
+            if (!firebaseConfig) {
+                console.error("Firebase config is not available.");
+                addLogEntry('system_error', { message: "Firebase config is not available." });
+                showModal("Error: Firebase configuration is missing. Logging will not work.");
+                userIdDisplay.textContent = "Config Error";
+                return;
+            }
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                setLogLevel('debug'); 
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("User authenticated with UID:", userId);
+                        userIdDisplay.textContent = userId;
+                        feedbackLogCollectionRef = collection(db, `artifacts/${appId}/users/${userId}/feedbackLog`);
+                        isAuthReady = true; 
+                        addLogEntry('auth_state', { status: 'authenticated', userId: userId });
+                        console.log("Auth is ready. Loading log...");
+                        loadLog(); 
+                    } else {
+                        console.log("onAuthStateChanged: User is null.");
+                        userId = null; 
+                        isAuthReady = false; 
+                        addLogEntry('auth_state', { status: 'unauthenticated' });
+                        userIdDisplay.textContent = "Not signed in";
+                        if (logContainer) logContainer.innerHTML = '<p class="text-gray-500 italic">Sign in to see the log.</p>';
+                    }
+                });
+                
+                if (auth.currentUser) {
+                    console.log("User already available:", auth.currentUser.uid);
+                } else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    console.log("Attempting to sign in with custom token...");
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    console.log("No initial token/user, attempting anonymous sign-in...");
+                    await signInAnonymously(auth);
+                }
+
+            } catch (error) {
+                console.error("Firebase initialization or initial sign-in failed:", error);
+                addLogEntry('system_error', { message: "Firebase init/auth failed", error: error.toString() });
+                showModal("Error: Firebase initialization or sign-in failed. Logging may not work.");
+                userIdDisplay.textContent = "Auth Error";
+                isAuthReady = false;
+                if (logContainer) logContainer.innerHTML = '<p class="text-red-500 italic">Sign-in error. Log unavailable.</p>';
+            }
+        }
+
+        // --- TTS Voice Setup ---
+        function populateVoiceList() {
+            voiceLoadAttempted = true;
+            if (typeof speechSynthesis === 'undefined') {
+                addLogEntry('tts_setup', { status: 'error', message: 'SpeechSynthesis API not supported.' });
+                return;
+            }
+            voices = speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                const samanthaSearchTerms = ['samantha', 'microsoft samantha', 'samantha mobile', 'samantha desktop', 'female united states']; // Added more generic term
+                preferredVoice = voices.find(voice => 
+                    samanthaSearchTerms.some(term => voice.name.toLowerCase().includes(term.toLowerCase())) || 
+                    (voice.lang.toLowerCase().startsWith('en-us') && voice.name.toLowerCase().includes('female')) // Fallback to any US English female voice
+                );
+                 if (!preferredVoice && voices.some(v => v.name.toLowerCase().includes('samantha'))) { // Specific check if a "Samantha" was missed
+                    preferredVoice = voices.find(v => v.name.toLowerCase().includes('samantha'));
+                }
+
+
+                if (preferredVoice) {
+                    console.log("Preferred voice found and selected:", preferredVoice.name, preferredVoice.lang);
+                    addLogEntry('tts_setup', { status: 'success', voiceSelected: preferredVoice.name, voiceUri: preferredVoice.voiceURI, lang: preferredVoice.lang, default: preferredVoice.default });
+                } else {
+                    console.log("Preferred voice 'Samantha' (or variant/fallback) not found. Using system default voice.");
+                    if (!voiceListLogged) { 
+                        addLogEntry('tts_setup', { 
+                            status: 'info', 
+                            message: "Preferred voice 'Samantha' or suitable US English female not found. Using system default.",
+                            availableVoices: voices.map(v => ({name: v.name, lang: v.lang, default: v.default, voiceURI: v.voiceURI})) 
+                        });
+                        voiceListLogged = true;
+                    }
+                }
+            } else {
+                 addLogEntry('tts_setup', { status: 'info', message: 'No voices available from getVoices() at this time. Will rely on onvoiceschanged or retry.' });
+            }
+        }
+
+        if (typeof speechSynthesis !== 'undefined') {
+            if (speechSynthesis.getVoices().length === 0 && speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = () => {
+                    if (!voiceLoadAttempted || voices.length === 0) { 
+                         console.log("onvoiceschanged event fired. Populating voice list.");
+                         populateVoiceList();
+                    }
+                };
+            } else if (speechSynthesis.getVoices().length > 0) {
+                populateVoiceList();
+            } else {
+                setTimeout(populateVoiceList, 750); // Increased delay for initial voice load attempt
+            }
+        } else {
+            console.warn("Speech Synthesis not supported by this browser.");
+            addLogEntry('tts_setup', { status: 'error', message: 'SpeechSynthesis API not supported at all.' });
+        }
+
+
+        // --- TTS Functions ---
+        function speakText(text, onEndCallback, storyIdToHighlight = null) {
+            if (!('speechSynthesis' in window)) {
+                showModal('Sorry, your browser does not support text-to-speech.');
+                addLogEntry('tts_error', { trigger: 'speakText_guard', message: 'SpeechSynthesis API not supported.' });
+                if (onEndCallback) onEndCallback(true); 
+                return;
+            }
+            
+            // Aggressively stop any current speech and clear state
+            if (currentUtterance) {
+                currentUtterance.onend = null;
+                currentUtterance.onerror = null;
+            }
+            speechSynthesis.cancel(); 
+            currentUtterance = null; // Nullify immediately
+
+            // Delay to allow the speech engine to fully process the cancel.
+            setTimeout(() => {
+                // Log current speech synthesis state before attempting to speak
+                const speechState = {
+                    speaking: speechSynthesis.speaking,
+                    pending: speechSynthesis.pending
+                };
+                addLogEntry('tts_pre_speak_check', speechState);
+
+                if (speechState.speaking || speechState.pending) {
+                    console.warn("SpeechSynthesis still active (speaking/pending) after cancel and delay. This may lead to errors. Forcing another cancel.");
+                    addLogEntry('tts_warning', {message: "Still speaking/pending after cancel+delay. Forcing another cancel.", state: speechState});
+                    speechSynthesis.cancel(); 
+                     // If it's still speaking/pending, it's risky to proceed. We might skip this speak attempt.
+                    if (onEndCallback) onEndCallback(true); // Indicate an issue
+                    return; 
+                }
+
+                unhighlightStory(currentlyHighlightedStoryId); 
+
+                if (storyIdToHighlight) {
+                    highlightStory(storyIdToHighlight); 
+                }
+
+                const newUtterance = new SpeechSynthesisUtterance(text);
+                if (preferredVoice) {
+                    newUtterance.voice = preferredVoice;
+                } else if (voices.length > 0 && !preferredVoice && !voiceLoadAttempted) {
+                    populateVoiceList(); 
+                    if (preferredVoice) newUtterance.voice = preferredVoice;
+                }
+                
+                currentUtterance = newUtterance; 
+
+                newUtterance.onend = (event) => {
+                    if (newUtterance === currentUtterance) { 
+                        currentUtterance = null; 
+                        unhighlightStory(storyIdToHighlight); 
+                        if (onEndCallback) onEndCallback();
+                    } else {
+                        console.log("onend called for a stale utterance (currentUtterance mismatch).");
+                    }
+                };
+
+                newUtterance.onerror = (event) => {
+                    const errorType = event.error || 'unknown_error'; 
+                    console.error(`SpeechSynthesisUtterance.onerror: ${errorType}`, 'Utterance:', newUtterance, 'Event:', event);
+                    
+                    if (newUtterance === currentUtterance) {
+                        // Don't show modal for 'interrupted' or 'canceled' as these are often intentional
+                        if (errorType !== 'interrupted' && errorType !== 'canceled') {
+                            showModal(`Speech error: ${errorType}.`);
+                        }
+                        addLogEntry('tts_error', { 
+                            trigger: 'utterance_onerror',
+                            errorCode: errorType,
+                            message: `Error during speech: ${errorType}`, 
+                            textAttempted: text.substring(0,100) + (text.length > 100 ? "..." : ""),
+                            voiceUsed: newUtterance.voice ? newUtterance.voice.name : 'default',
+                            langUsed: newUtterance.lang,
+                            voiceURI: newUtterance.voice ? newUtterance.voice.voiceURI : 'N/A'
+                        });
+                        currentUtterance = null; 
+                        unhighlightStory(storyIdToHighlight);
+                        if (isPlayingAll && onEndCallback) onEndCallback(true); 
+                    } else {
+                        console.log("onerror called for a stale utterance (currentUtterance mismatch).");
+                         addLogEntry('tts_stale_error', { 
+                            errorCode: errorType,
+                            message: `Stale error during speech: ${errorType}`,
+                            textAttempted: text.substring(0,100) + "..."
+                        });
+                    }
+                };
+
+                try {
+                    speechSynthesis.speak(newUtterance);
+                } catch (e) {
+                    console.error("Error calling speechSynthesis.speak():", e);
+                    showModal("Failed to initiate speech. Please try again.");
+                    addLogEntry('tts_error', { trigger: 'speak_call_exception', message: 'Error calling speechSynthesis.speak()', error: e.toString() });
+                    if (newUtterance === currentUtterance) currentUtterance = null;
+                    unhighlightStory(storyIdToHighlight);
+                    if (onEndCallback) onEndCallback(true);
+                }
+
+            }, 250); // Increased delay to 250ms
+        }
+
+        function startPlayAllStories() {
+            if (newsStories.length === 0) return;
+            stopAnyTTS(); 
+            isPlayingAll = true;
+            isPaused = false;
+            playPauseBtn.innerHTML = '<i class="fas fa-pause mr-2"></i> Pause All';
+            playStoryInSequence(currentStoryIndex);
+        }
+
+        function playStoryInSequence(index) {
+            if (index >= newsStories.length) {
+                stopPlayAllSequence(true); 
+                showModal("Finished playing all stories.");
+                return;
+            }
+            const story = newsStories[index];
+            const textToSpeak = `${story.title}. ${story.summary}`;
+            speakText(textToSpeak, (errorOccurred) => {
+                if (isPlayingAll && !isPaused && !errorOccurred) {
+                    currentStoryIndex++;
+                    playStoryInSequence(currentStoryIndex);
+                } else if (errorOccurred && isPlayingAll) {
+                    stopPlayAllSequence(false); 
+                }
+            }, story.id); 
+        }
+
+        function pausePlayAllSequence() {
+            if (speechSynthesis.speaking && isPlayingAll && !isPaused && currentUtterance) {
+                speechSynthesis.pause();
+                isPaused = true;
+                playPauseBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Resume All';
+            } else if (!currentUtterance && isPlayingAll) {
+                isPaused = true;
+                playPauseBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Resume All';
+            }
+        }
+
+        function resumePlayAllSequence() {
+            if (isPaused && isPlayingAll) { 
+                isPaused = false; 
+                playPauseBtn.innerHTML = '<i class="fas fa-pause mr-2"></i> Pause All';
+                if (speechSynthesis.paused && currentUtterance) { 
+                    speechSynthesis.resume();
+                    if (currentStoryIndex < newsStories.length) {
+                         highlightStory(newsStories[currentStoryIndex].id);
+                    }
+                } else { 
+                    playStoryInSequence(currentStoryIndex); 
+                }
+            }
+        }
+        
+        function stopAnyTTS(resetPlayAllState = true) {
+            if ('speechSynthesis' in window) {
+                if (currentUtterance) {
+                    currentUtterance.onend = null;
+                    currentUtterance.onerror = null;
+                }
+                speechSynthesis.cancel(); 
+            }
+            unhighlightStory(null); 
+            currentUtterance = null; 
+            if (resetPlayAllState) {
+                isPlayingAll = false;
+                isPaused = false;
+                if (playPauseBtn) playPauseBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Play All';
+            }
+        }
+        
+        function stopPlayAllSequence(resetIndex = true) {
+            stopAnyTTS(true); 
+            if (resetIndex) {
+                currentStoryIndex = 0;
+            }
+        }
+
+
+        playPauseBtn.addEventListener('click', () => {
+            if (!isPlayingAll) {
+                currentStoryIndex = 0; 
+                startPlayAllStories();
+            } else if (isPaused) {
+                resumePlayAllSequence();
+            } else {
+                pausePlayAllSequence();
+            }
+        });
+
+        replayPrevBtn.addEventListener('click', () => {
+            const now = Date.now();
+            const wasPlayingOrPaused = isPlayingAll || isPaused;
+            
+            stopAnyTTS(false); 
+
+            if (now - lastReplayClickTime < 400) { 
+                currentStoryIndex = Math.max(0, currentStoryIndex - 1);
+            }
+
+            if (wasPlayingOrPaused) { 
+                isPlayingAll = true; 
+                isPaused = false;
+                if (playPauseBtn) playPauseBtn.innerHTML = '<i class="fas fa-pause mr-2"></i> Pause All';
+                playStoryInSequence(currentStoryIndex);
+            } else { 
+                 if (currentStoryIndex >= 0 && currentStoryIndex < newsStories.length) {
+                    highlightStory(newsStories[currentStoryIndex].id);
+                 }
+            }
+            lastReplayClickTime = now;
+        });
+
+        nextBtn.addEventListener('click', () => {
+            const wasPlayingOrPaused = isPlayingAll || isPaused;
+            stopAnyTTS(false); 
+
+            currentStoryIndex++;
+            if (currentStoryIndex >= newsStories.length) {
+                currentStoryIndex = newsStories.length -1; 
+                if (wasPlayingOrPaused) stopPlayAllSequence(false); 
+                showModal("End of news stories.");
+                if (currentStoryIndex >= 0 && currentStoryIndex < newsStories.length) {
+                    highlightStory(newsStories[currentStoryIndex].id);
+                }
+                return;
+            }
+            
+            if (wasPlayingOrPaused) { 
+                isPlayingAll = true;
+                isPaused = false;
+                if (playPauseBtn) playPauseBtn.innerHTML = '<i class="fas fa-pause mr-2"></i> Pause All';
+                playStoryInSequence(currentStoryIndex);
+            } else { 
+                if (currentStoryIndex >= 0 && currentStoryIndex < newsStories.length) {
+                    highlightStory(newsStories[currentStoryIndex].id);
+                    showModal(`Skipped to story: ${newsStories[currentStoryIndex].title}.`);
+                }
+            }
+        });
+
+        readCustomTextTopBtn.addEventListener('click', () => {
+            const text = customTextTopInput.value.trim();
+            addLogEntry('custom_tts_attempt', { inputField: 'top', textProvidedLength: text.length });
+            if (text) {
+                stopPlayAllSequence(true); 
+                speakText(text); 
+            } else {
+                showModal("Please enter some text to read.");
+                addLogEntry('custom_tts_info', { inputField: 'top', message: 'Empty text provided.' });
+            }
+        });
+
+        readCustomTextBottomBtn.addEventListener('click', () => {
+            const text = customTextBottomInput.value.trim();
+            addLogEntry('custom_tts_attempt', { inputField: 'bottom', textProvidedLength: text.length });
+            if (text) {
+                stopPlayAllSequence(true); 
+                speakText(text); 
+            } else {
+                showModal("Please enter some text to read.");
+                addLogEntry('custom_tts_info', { inputField: 'bottom', message: 'Empty text provided.' });
+            }
+        });
+
+        function highlightStory(storyId) {
+            unhighlightStory(null); 
+            currentlyHighlightedStoryId = storyId; 
+            const storyElement = document.getElementById(`story-card-${storyId}`);
+            if (storyElement) {
+                storyElement.classList.add('current-story-highlight');
+                storyElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+
+        function unhighlightStory(storyIdToKeepHighlighted) {
+            if (currentlyHighlightedStoryId && currentlyHighlightedStoryId !== storyIdToKeepHighlighted) {
+                const oldStoryElement = document.getElementById(`story-card-${currentlyHighlightedStoryId}`);
+                if (oldStoryElement) {
+                    oldStoryElement.classList.remove('current-story-highlight');
+                }
+            }
+            if (storyIdToKeepHighlighted === null) {
+                 currentlyHighlightedStoryId = null;
+            }
+        }
+
+
+        function renderLog(logEntries) {
+            if (!logContainer) return; 
+            if (logEntries.length === 0) {
+                logContainer.innerHTML = '<p class="text-gray-500 italic">Log is empty.</p>';
+                return;
+            }
+            logContainer.innerHTML = ''; 
+            
+            logEntries.forEach(entry => {
+                const entryDiv = document.createElement('div');
+                entryDiv.classList.add('log-entry');
+                let content = `<span class="font-semibold">${entry.type.toUpperCase()}</span> (${new Date(entry.timestamp?.toDate?.() || Date.now()).toLocaleString()}): `;
+                
+                if (entry.details) {
+                    if (entry.type === 'rating') {
+                        content += `Story "${entry.details.storyTitle}" rated ${entry.details.rating} stars.`;
+                    } else if (entry.type === 'tellMeMore') {
+                        content += `Requested more info for story "${entry.details.storyTitle}".`;
+                    } else if (entry.type === 'thought') {
+                        content += `Thought: ${entry.details.text}`;
+                    } else if (entry.type === 'error') {
+                        content += `JS Error: ${entry.details.message} at ${entry.details.source}:${entry.details.lineno}`;
+                    } else if (entry.type === 'tts_error' || entry.type === 'tts_stale_error') {
+                        content += `TTS Error (${entry.details.errorCode || 'N/A'}): ${entry.details.message || entry.details.trigger} (Voice: ${entry.details.voiceUsed || 'N/A'})`;
+                         if(entry.details.textAttempted) content += ` Text: ${entry.details.textAttempted.substring(0,30)}...`;
+                    } else if (entry.type === 'tts_setup') {
+                        content += `TTS Setup: ${entry.details.message || entry.details.status}`;
+                         if(entry.details.voiceSelected) content += ` (Selected: ${entry.details.voiceSelected})`;
+                         if(entry.details.availableVoices && !entry.details.voiceSelected) content += ` (${entry.details.availableVoices.length} voices found, Pref. not among them or default)`;
+                    } else if (entry.type === 'custom_tts_attempt' || entry.type === 'custom_tts_info') {
+                        content += `Custom TTS (${entry.details.inputField}): ${entry.details.message || `Attempted len: ${entry.details.textProvidedLength}`}`;
+                    } else if (entry.type === 'auth_state') {
+                        content += `Auth: ${entry.details.status}${entry.details.userId ? ' ('+entry.details.userId.substring(0,8)+'...)':''}`;
+                    } else if (entry.type === 'tts_individual_story'){
+                        content += `TTS Indi: ${entry.details.title}`;
+                    } else if (entry.type === 'tts_warning' || entry.type === 'tts_pre_speak_check'){
+                        content += `TTS Info: ${entry.details.message}`;
+                        if(entry.details.state) content += ` (Speaking: ${entry.details.state.speaking}, Pending: ${entry.details.state.pending})`;
+                    }
+                     else {
+                        content += JSON.stringify(entry.details).substring(0, 100) + (JSON.stringify(entry.details).length > 100 ? "..." : "");
+                    }
+                }
+                entryDiv.innerHTML = content;
+                logContainer.prepend(entryDiv); 
+            });
+        }
+
+        function loadLog() {
+            if (!isAuthReady || !feedbackLogCollectionRef) { 
+                console.log("Auth not ready or collection ref not set, skipping log load.");
+                if (logContainer) {
+                    logContainer.innerHTML = `<p class="text-gray-500 italic">${isAuthReady ? 'Log collection not ready.' : 'Authenticating...'}</p>`;
+                }
+                return;
+            }
+            console.log("Attempting to load log from:", feedbackLogCollectionRef.path);
+            
+            const q = query(feedbackLogCollectionRef); 
+
+            onSnapshot(q, (snapshot) => {
+                console.log(`Log snapshot received: ${snapshot.docs.length} entries.`);
+                const entries = [];
+                snapshot.forEach(doc => {
+                    entries.push({ id: doc.id, ...doc.data() });
+                });
+                entries.sort((a, b) => {
+                    const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp || 0);
+                    const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp || 0);
+                    return timeB - timeA;
+                });
+                renderLog(entries);
+            }, (error) => {
+                console.error("Error fetching log from Firestore:", error);
+                addLogEntry('system_error', {message: 'Error fetching log from Firestore', error: error.toString()});
+                if (logContainer) { 
+                    logContainer.innerHTML = `<p class="text-red-500 italic">Error loading log: ${error.message}. Check console.</p>`;
+                }
+            });
+        }
+
+
+        toggleLogBtn.addEventListener('click', () => {
+            if (!logContainer) return;
+            logContainer.classList.toggle('hidden');
+            toggleLogBtn.textContent = logContainer.classList.contains('hidden') ? 'View Log' : 'Hide Log';
+        });
+
+        copyLogBtn.addEventListener('click', () => {
+            if (!logContainer) return;
+            const logText = Array.from(logContainer.querySelectorAll('.log-entry'))
+                               .map(entry => entry.textContent)
+                               .join('\n');
+            if (logText) {
+                const textarea = document.createElement('textarea');
+                textarea.value = logText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showModal('Log copied to clipboard!');
+                } catch (err) {
+                    console.error('Failed to copy log:', err);
+                    addLogEntry('system_event', {message: 'Failed to copy log', error: err.toString()});
+                    showModal('Failed to copy log. Please try manually.');
+                }
+                document.body.removeChild(textarea);
+            } else {
+                showModal('Log is empty, nothing to copy.');
+            }
+        });
+
+        saveThoughtsBtn.addEventListener('click', () => {
+            const thoughtText = personalThoughtsInput.value.trim();
+            if (thoughtText) {
+                addLogEntry('thought', { text: thoughtText });
+                personalThoughtsInput.value = ''; 
+                showModal("Thought saved to log.");
+            } else {
+                showModal("Please enter your thoughts before saving.");
+                addLogEntry('thought_attempt_empty', { message: "Attempted to save empty thought." });
+            }
+        });
+
+
+        // --- Render News Stories ---
+        function renderNewsStories() {
+            if (!newsContainer) return;
+            newsContainer.innerHTML = ''; 
+            newsStories.forEach((story, index) => {
+                const storyCard = document.createElement('article');
+                storyCard.id = `story-card-${story.id}`;
+                storyCard.className = 'bg-white p-6 rounded-lg shadow-md border border-gray-200 transition-all duration-300 ease-in-out';
+                storyCard.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h2 class="text-2xl font-bold text-indigo-700">${index + 1}. ${story.title}</h2>
+                        <button class="read-story-btn text-sky-600 hover:text-sky-800 p-1" title="Read this story" data-story-id="${story.id}">
+                            <i class="fas fa-volume-up fa-lg"></i>
+                        </button>
+                    </div>
+                    <div class="story-meta mb-1">
+                        <span>Published: ${story.publicationDate}</span> | <span>Source: ${story.source}</span>
+                    </div>
+                    <p class="text-gray-600 mb-4">${story.summary}</p>
+                    <div class="flex flex-col sm:flex-row justify-between items-center">
+                        <div class="star-rating mb-3 sm:mb-0" data-story-id="${story.id}" data-story-title="${story.title}">
+                            ${[1,2,3,4,5].map(starNum => `<i class="fas fa-star star" data-value="${starNum}" title="${starNum} star${starNum > 1 ? 's' : ''}"></i>`).join('')}
+                            <span class="ml-2 text-sm text-gray-500" id="rating-text-${story.id}">Rate this story</span>
+                        </div>
+                        <button class="tell-more-btn bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm" data-story-id="${story.id}" data-story-title="${story.title}">
+                            <i class="fas fa-info-circle mr-2"></i> Tell Me More
+                        </button>
+                    </div>
+                `;
+                newsContainer.appendChild(storyCard);
+            });
+
+            document.querySelectorAll('.read-story-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const storyId = button.dataset.storyId;
+                    const storyToRead = newsStories.find(s => s.id === storyId);
+                    if (storyToRead) {
+                        stopPlayAllSequence(false); 
+                        const text = `${storyToRead.title}. ${storyToRead.summary}`;
+                        addLogEntry('tts_individual_story', { storyId: storyId, title: storyToRead.title });
+                        speakText(text, null, storyId); 
+                    }
+                });
+            });
+
+            document.querySelectorAll('.star-rating').forEach(ratingSystem => {
+                const storyId = ratingSystem.dataset.storyId;
+                const storyTitle = ratingSystem.dataset.storyTitle;
+                const stars = ratingSystem.querySelectorAll('.star');
+                const ratingText = document.getElementById(`rating-text-${storyId}`);
+
+                stars.forEach(star => {
+                    star.addEventListener('click', () => {
+                        const value = parseInt(star.dataset.value);
+                        addLogEntry('rating', { storyId, storyTitle, rating: value });
+                        stars.forEach(s => {
+                            s.classList.remove('hovered-effect'); 
+                            s.classList.toggle('rated', parseInt(s.dataset.value) <= value);
+                        });
+                        if(ratingText) ratingText.textContent = `Rated ${value} star${value > 1 ? 's' : ''}!`;
+                        showModal(`You rated "${storyTitle}" ${value} star${value > 1 ? 's' : ''}.`);
+                    });
+                    star.addEventListener('mouseover', () => {
+                         const value = parseInt(star.dataset.value);
+                         stars.forEach((s, i) => {
+                            if (i < value) s.classList.add('hovered-effect');
+                            else s.classList.remove('hovered-effect');
+                         });
+                    });
+                    star.addEventListener('mouseout', () => { 
+                         stars.forEach(s => s.classList.remove('hovered-effect'));
+                         const currentRating = Array.from(stars).filter(s => s.classList.contains('rated')).length;
+                         stars.forEach((s, i) => {
+                            s.classList.toggle('rated', i < currentRating);
+                         });
+                    });
+                });
+            });
+
+            document.querySelectorAll('.tell-more-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    const storyId = button.dataset.storyId;
+                    const storyTitle = button.dataset.storyTitle;
+                    addLogEntry('tellMeMore', { storyId, storyTitle });
+                    showModal(`Request for more info on "${storyTitle}" logged.`);
+                });
+            });
+        }
+
+        // --- Initial Load ---
+        window.onload = async () => {
+            renderNewsStories(); 
+            await initializeFirebase(); 
+        };
+
+    </script>
+</body>
+</html>
