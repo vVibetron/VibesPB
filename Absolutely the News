@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Site Generator Form</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .log-entry {
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+        }
+        .log-entry:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .star { cursor: pointer; color: #d1d5db; }
+        .star.rated, .star:hover, .star.hovered-effect { color: #f59e0b; }
+        .current-story-highlight {
+            background-color: #e0f2fe;
+            border-left: 4px solid #0ea5e9;
+        }
+        .story-meta {
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+        #generatedNewsSiteContainer article { margin-bottom: 2rem; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 p-4 md:p-8">
+
+    <div class="container mx-auto max-w-6xl bg-white shadow-xl rounded-lg p-6">
+        <h1 class="text-3xl font-bold text-center text-indigo-700 mb-8">News Site Generator</h1>
+
+        <section id="newsInputSection" class="mb-10 p-6 bg-indigo-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold text-indigo-600 mb-4">1. Paste Your News Stories</h2>
+            <p class="text-sm text-gray-600 mb-3">
+                Paste 1 to 50 numbered news stories. Each story should start with a number followed by a period (e.g., "1. Title..."). The first line after the number will be treated as the title, and subsequent lines as the summary.
+            </p>
+            <textarea id="newsStoriesInput" class="w-full h-64 p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Example:&#10;1. My First Story Title&#10;This is the summary of the first story. It can span multiple lines.&#10;&#10;2. Another Amazing Headline&#10;Details about the second news item."></textarea>
+            <button id="generateSiteBtn" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-semibold px-6 py-2 rounded-md shadow-md flex items-center">
+                <i class="fas fa-cogs mr-2"></i> Generate News Site
+            </button>
+        </section>
+
+        <section id="formFeedbackAndLogSection" class="mb-10 p-6 bg-gray-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Form Feedback & Diagnostics</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="formFeedbackInput" class="block text-sm font-medium text-gray-700 mb-1">Your Feedback on this Form:</label>
+                    <textarea id="formFeedbackInput" class="w-full h-24 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500" placeholder="Tell us about your experience with this generator form..."></textarea>
+                    <button id="saveFormFeedbackBtn" class="mt-2 bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-md text-sm">
+                        <i class="fas fa-paper-plane mr-2"></i> Send Feedback
+                    </button>
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-medium text-gray-600">Form Activity Log:</h3>
+                        <div>
+                            <button id="toggleFormLogBtn" class="bg-gray-400 hover:bg-gray-500 text-white px-3 py-1 rounded-md text-xs mr-1">View Log</button>
+                            <button id="copyFormLogBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md text-xs">Copy Log</button>
+                        </div>
+                    </div>
+                    <div id="formLogContainer" class="hidden bg-white p-3 rounded-md border border-gray-300 h-32 overflow-y-auto text-xs">
+                        <p class="text-gray-500 italic">Form log is empty.</p>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Form User ID: <span id="formUserIdDisplay">Initializing...</span></p>
+                </div>
+            </div>
+        </section>
+
+        <hr class="my-8 border-gray-300">
+        <section id="generatedNewsSiteContainer" class="hidden">
+            <h2 class="text-3xl font-bold text-center text-indigo-700 mb-6">Generated News Reader</h2>
+            <header id="generatedSiteHeader" class="mb-6 pb-6 border-b border-gray-200 sticky top-0 bg-white py-4 z-10 shadow-sm">
+            </header>
+            <main id="generatedNewsContainer" class="space-y-8">
+            </main>
+            <footer id="generatedSiteFooter" class="mt-8 pt-6 border-t border-gray-200">
+            </footer>
+        </section>
+    </div>
+
+    <div id="messageModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-50">
+        <div class="bg-white p-5 rounded-lg shadow-xl max-w-sm w-full mx-4">
+            <div class="text-center">
+                <p id="messageModalText" class="text-lg font-medium text-gray-700 mb-4"></p>
+                <button id="messageModalCloseBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, serverTimestamp, query, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const baseAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let formApp, formAuth, formDb, formUserId, formLogCollectionRef;
+        let isFormAuthReady = false;
+        const newsStoriesInput = document.getElementById('newsStoriesInput');
+        const generateSiteBtn = document.getElementById('generateSiteBtn');
+        const formFeedbackInput = document.getElementById('formFeedbackInput');
+        const saveFormFeedbackBtn = document.getElementById('saveFormFeedbackBtn');
+        const formLogContainer = document.getElementById('formLogContainer');
+        const toggleFormLogBtn = document.getElementById('toggleFormLogBtn');
+        const copyFormLogBtn = document.getElementById('copyFormLogBtn');
+        const formUserIdDisplay = document.getElementById('formUserIdDisplay');
+        const generatedNewsSiteContainer = document.getElementById('generatedNewsSiteContainer');
+        
+        let siteCurrentPastedStories = []; 
+        let siteCurrentStoryIndex = 0;
+        let siteIsPlayingAll = false;
+        let siteIsPaused = false;
+        let siteCurrentUtterance = null;
+        let siteLastReplayClickTime = 0;
+        let siteCurrentlyHighlightedStoryId = null;
+        let sitePreferredVoice = null;
+        let siteVoices = [];
+        let siteVoiceLoadAttempted = false;
+        let siteVoiceListLogged = false;
+        let siteLogCollectionRef;
+        let siteDb, siteAuth; 
+
+        const messageModal = document.getElementById('messageModal');
+        const messageModalText = document.getElementById('messageModalText');
+        const messageModalCloseBtn = document.getElementById('messageModalCloseBtn');
+
+        function showModal(message) {
+            messageModalText.textContent = message;
+            messageModal.classList.remove('hidden');
+        }
+        messageModalCloseBtn.addEventListener('click', () => messageModal.classList.add('hidden'));
+
+        async function addFormLogEntry(type, data) {
+            if (!isFormAuthReady || !formDb || !formUserId) {
+                console.warn("Form Firestore not ready, logging to console only:", { type, ...data });
+                return;
+            }
+            const logEntry = { userId: formUserId, appId: `${baseAppId}-form`, timestamp: serverTimestamp(), type, userAgent: navigator.userAgent, details: data };
+            try {
+                if (!formLogCollectionRef) { console.error("formLogCollectionRef is not initialized."); return; }
+                await addDoc(formLogCollectionRef, logEntry);
+            } catch (error) { console.error("Error adding form log entry:", error); }
+        }
+
+        window.onerror = function(message, source, lineno, colno, error) {
+            addFormLogEntry('form_error', { message, source, lineno, colno, error: error ? error.stack || error.toString() : 'N/A' });
+            return false;
+        };
+        
+        async function initializeFormFirebase() {
+             if (!firebaseConfig) {
+                console.error("Firebase config unavailable for form.");
+                addFormLogEntry('form_system_error', { message: "Firebase config unavailable." });
+                formUserIdDisplay.textContent = "Config Error";
+                return;
+            }
+            try {
+                formApp = initializeApp(firebaseConfig, "formAppInstance_" + Date.now()); 
+                formAuth = getAuth(formApp);
+                formDb = getFirestore(formApp);
+                if (typeof setLogLevel === 'function') setLogLevel('debug');
+
+                onAuthStateChanged(formAuth, async (user) => {
+                    if (user) {
+                        formUserId = user.uid;
+                        formUserIdDisplay.textContent = formUserId;
+                        formLogCollectionRef = collection(formDb, `artifacts/${baseAppId}-form/users/${formUserId}/activityLog`);
+                        isFormAuthReady = true;
+                        addFormLogEntry('form_auth_state', { status: 'authenticated', userId: formUserId });
+                        loadFormLog();
+                    } else {
+                        formUserId = null; isFormAuthReady = false;
+                        addFormLogEntry('form_auth_state', { status: 'unauthenticated' });
+                        formUserIdDisplay.textContent = "Not signed in";
+                    }
+                });
+
+                if (formAuth.currentUser) { /* Handled by onAuthStateChanged */ }
+                else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(formAuth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(formAuth);
+                }
+            } catch (error) {
+                console.error("Form Firebase init/auth failed:", error);
+                addFormLogEntry('form_system_error', { message: "Form Firebase init/auth error", error: error.toString() });
+                formUserIdDisplay.textContent = "Auth Error";
+            }
+        }
+
+        function renderFormLog(logEntries) {
+            if (!formLogContainer) return;
+            formLogContainer.innerHTML = logEntries.length === 0 ? '<p class="text-gray-500 italic">Form log is empty.</p>' : '';
+            logEntries.forEach(entry => {
+                const entryDiv = document.createElement('div');
+                entryDiv.classList.add('log-entry');
+                let content = `<span class="font-semibold">${entry.type.toUpperCase()}</span> (${new Date(entry.timestamp?.toDate?.() || Date.now()).toLocaleString()}): `;
+                content += JSON.stringify(entry.details).substring(0,150) + (JSON.stringify(entry.details).length > 150 ? "..." : "");
+                entryDiv.innerHTML = content;
+                formLogContainer.prepend(entryDiv);
+            });
+        }
+
+        function loadFormLog() {
+             if (!isFormAuthReady || !formLogCollectionRef) return;
+            onSnapshot(query(formLogCollectionRef), (snapshot) => {
+                const entries = [];
+                snapshot.forEach(doc => entries.push({ id: doc.id, ...doc.data() }));
+                entries.sort((a, b) => (b.timestamp?.toDate?.() || 0) - (a.timestamp?.toDate?.() || 0));
+                renderFormLog(entries);
+            }, error => {
+                console.error("Error fetching form log:", error);
+                addFormLogEntry('form_system_error', { message: 'Error fetching form log', error: error.toString() });
+            });
+        }
+        
+        toggleFormLogBtn.addEventListener('click', () => {
+            formLogContainer.classList.toggle('hidden');
+            toggleFormLogBtn.textContent = formLogContainer.classList.contains('hidden') ? 'View Log' : 'Hide Log';
+            addFormLogEntry('form_ui_interaction', { action: 'toggle_form_log', visible: !formLogContainer.classList.contains('hidden') });
+        });
+
+        copyFormLogBtn.addEventListener('click', () => {
+            const logText = Array.from(formLogContainer.querySelectorAll('.log-entry')).map(e => e.textContent).join('\n');
+            if (logText) {
+                const textarea = document.createElement('textarea');
+                textarea.value = logText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showModal('Form log copied!');
+                } catch (err) {
+                    showModal('Failed to copy form log. Please try manually.');
+                    addFormLogEntry('form_ui_error', {action: 'copy_form_log_failed_execCommand', error: err.toString()});
+                }
+                document.body.removeChild(textarea);
+            } else {
+                showModal('Form log is empty.');
+            }
+            addFormLogEntry('form_ui_interaction', { action: 'copy_form_log_attempt' });
+        });
+
+        saveFormFeedbackBtn.addEventListener('click', () => {
+            const feedback = formFeedbackInput.value.trim();
+            if (feedback) {
+                addFormLogEntry('form_feedback_provided', { feedback: feedback });
+                formFeedbackInput.value = '';
+                showModal("Thank you for your feedback on the form!");
+            } else {
+                showModal("Please enter some feedback for the form.");
+            }
+        });
+
+
+        generateSiteBtn.addEventListener('click', () => {
+            addFormLogEntry('form_action', { action: 'generate_site_clicked' });
+            const inputText = newsStoriesInput.value.trim();
+            if (!inputText) {
+                showModal("Please paste some news stories."); return;
+            }
+            const parsedStories = parseNewsStories(inputText);
+            if (parsedStories.length === 0 || parsedStories.length > 50) {
+                showModal("Please provide 1-50 validly numbered stories."); return;
+            }
+            siteCurrentPastedStories = parsedStories; 
+            addFormLogEntry('form_action_success', { action: 'stories_parsed', count: parsedStories.length });
+            renderGeneratedNewsSite(parsedStories);
+            generatedNewsSiteContainer.classList.remove('hidden');
+            generatedNewsSiteContainer.scrollIntoView({ behavior: 'smooth' });
+        });
+
+        function parseNewsStories(text) {
+            const stories = [];
+            const lines = text.split('\n');
+            let currentStory = null;
+            let storyCounter = 0;
+
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                const storyStartMatch = trimmedLine.match(/^(\d+)\s*\.\s*(.*)/);
+
+                if (storyStartMatch) {
+                    if (currentStory) stories.push(currentStory);
+                    storyCounter++;
+                    const titleCandidate = storyStartMatch[2].trim();
+                    currentStory = {
+                        id: `genStory${storyCounter}-${Date.now()}`,
+                        num: storyCounter, 
+                        title: titleCandidate,
+                        summary: '',
+                        publicationDate: new Date().toISOString().split('T')[0],
+                        source: "Pasted Source"
+                    };
+                } else if (currentStory) {
+                    if (!currentStory.title && trimmedLine) { 
+                        currentStory.title = trimmedLine;
+                    } else if (trimmedLine || currentStory.summary) { 
+                        currentStory.summary += (currentStory.summary ? '\n' : '') + trimmedLine;
+                    }
+                }
+            }
+            if (currentStory) stories.push(currentStory);
+            return stories.filter(s => s.title || s.summary);
+        }
+        
+        async function addSiteLogEntry(type, data) {
+            if (!siteLogCollectionRef || !formUserId) {
+                console.warn("Site log not configured, logging to console (site context):", { type, ...data });
+                return;
+            }
+            const logEntry = { userId: formUserId, appId: `${baseAppId}-generatedSite`, siteInstance: siteLogCollectionRef.id, timestamp: serverTimestamp(), type, userAgent: navigator.userAgent, details: data };
+            try { await addDoc(siteLogCollectionRef, logEntry); }
+            catch (error) { console.error("Error adding site log entry:", error); }
+        }
+
+        function populateSiteVoiceList() {
+            siteVoiceLoadAttempted = true;
+            if (typeof speechSynthesis === 'undefined') {
+                addSiteLogEntry('site_tts_setup', { status: 'error', message: 'SpeechSynthesis API not supported.' });
+                return;
+            }
+            siteVoices = speechSynthesis.getVoices();
+            if (siteVoices.length > 0) {
+                const samanthaSearchTerms = ['samantha', 'microsoft samantha', 'samantha mobile', 'samantha desktop', 'female united states', 'english united states female', 'microsoft zira', 'google us english']; // Added more fallbacks
+                sitePreferredVoice = siteVoices.find(voice => 
+                    samanthaSearchTerms.some(term => voice.name.toLowerCase().includes(term.toLowerCase()))
+                );
+                 if (!sitePreferredVoice && siteVoices.some(v => v.name.toLowerCase().includes('samantha'))) {
+                    sitePreferredVoice = siteVoices.find(v => v.name.toLowerCase().includes('samantha'));
+                }
+
+                if (sitePreferredVoice) {
+                    addSiteLogEntry('site_tts_setup', { status: 'success', voiceSelected: sitePreferredVoice.name, lang: sitePreferredVoice.lang });
+                } else {
+                    if (!siteVoiceListLogged) {
+                        addSiteLogEntry('site_tts_setup', { 
+                            status: 'info', 
+                            message: "Preferred voice 'Samantha' or common US English female not found for site. Using system default.",
+                            availableVoices: siteVoices.map(v => ({name: v.name, lang: v.lang, default: v.default, uri: v.voiceURI})) 
+                        });
+                        siteVoiceListLogged = true;
+                    }
+                }
+            } else {
+                 addSiteLogEntry('site_tts_setup', { status: 'info', message: 'No voices available from getVoices() for site at this call.' });
+            }
+        }
+        
+        function stopAnySiteTTS(resetPlayAllUI = true) {
+            addSiteLogEntry('site_tts_action', { action: 'stopAnySiteTTS_called', resetUI: resetPlayAllUI, speakingBefore: speechSynthesis.speaking, pendingBefore: speechSynthesis.pending });
+            if ('speechSynthesis' in window) {
+                if (siteCurrentUtterance) {
+                    siteCurrentUtterance.onend = null;
+                    siteCurrentUtterance.onerror = null;
+                    addSiteLogEntry('site_tts_action', {action: 'nulled_handlers_for_old_utterance', text: siteCurrentUtterance.text.substring(0,20)});
+                }
+                speechSynthesis.cancel();
+                siteCurrentUtterance = null; // Explicitly nullify after cancel
+            }
+            const oldHighlightedEl = document.querySelector('#generatedNewsContainer .current-story-highlight');
+            if(oldHighlightedEl) oldHighlightedEl.classList.remove('current-story-highlight');
+            siteCurrentlyHighlightedStoryId = null;
+            
+            if (resetPlayAllUI) {
+                siteIsPlayingAll = false;
+                siteIsPaused = false;
+                const btn = document.getElementById('sitePlayPauseBtn');
+                if (btn) btn.innerHTML = '<i class="fas fa-play mr-2"></i> Play All';
+            }
+            addSiteLogEntry('site_tts_action', { action: 'stopAnySiteTTS_completed', speakingAfter: speechSynthesis.speaking, pendingAfter: speechSynthesis.pending });
+        }
+
+        function siteSpeakText(text, onEndCallback, storyIdToHighlight = null) {
+            // Assumption: stopAnySiteTTS() has been called by the initiating event handler.
+            addSiteLogEntry('site_tts_action', { action: 'siteSpeakText_called', textLen: text.length, storyId: storyIdToHighlight, currentUtteranceExists: !!siteCurrentUtterance });
+            if (!('speechSynthesis' in window)) {
+                if (onEndCallback) onEndCallback(true); return;
+            }
+
+            setTimeout(() => {
+                const speechState = { speaking: speechSynthesis.speaking, pending: speechSynthesis.pending };
+                addSiteLogEntry('site_tts_pre_speak_check_site', speechState);
+
+                if (speechState.speaking || speechState.pending) {
+                    addSiteLogEntry('site_tts_warning', {message: "Site TTS: Still active before new speak. Forcing another cancel.", state: speechState});
+                    speechSynthesis.cancel(); 
+                    // If it's still active, it's highly problematic. We might need to wait longer or abandon.
+                    // For now, we proceed, but this log is key.
+                }
+
+                const oldHighlightedEl = document.querySelector('#generatedNewsContainer .current-story-highlight');
+                if(oldHighlightedEl) oldHighlightedEl.classList.remove('current-story-highlight');
+                if(storyIdToHighlight) {
+                    const elToHighlight = document.getElementById(`story-card-${storyIdToHighlight}`);
+                    if(elToHighlight) elToHighlight.classList.add('current-story-highlight');
+                    siteCurrentlyHighlightedStoryId = storyIdToHighlight;
+                } else {
+                    siteCurrentlyHighlightedStoryId = null;
+                }
+
+                const newUtterance = new SpeechSynthesisUtterance(text);
+                if (sitePreferredVoice) {
+                    newUtterance.voice = sitePreferredVoice;
+                }
+                
+                siteCurrentUtterance = newUtterance; // Assign new utterance to global tracking
+
+                newUtterance.onend = (event) => {
+                    if (newUtterance === siteCurrentUtterance) { 
+                        addSiteLogEntry('site_tts_event', {event: 'onend', storyId: storyIdToHighlight, text: text.substring(0,20)});
+                        siteCurrentUtterance = null; 
+                        if (onEndCallback) onEndCallback(false);
+                    } else {
+                         addSiteLogEntry('site_tts_event_stale', {event: 'onend_stale', storyId: storyIdToHighlight});
+                    }
+                };
+                newUtterance.onerror = (event) => {
+                    const errorType = event.error || 'unknown_error'; 
+                    if (newUtterance === siteCurrentUtterance) {
+                        addSiteLogEntry('site_tts_error', { errorCode: errorType, message: `Error during site speech: ${errorType}`, textAttemptedLen: text.length, voiceUsed: newUtterance.voice ? newUtterance.voice.name : 'default' });
+                        if (errorType !== 'interrupted' && errorType !== 'canceled') showModal(`Site Speech error: ${errorType}.`);
+                        siteCurrentUtterance = null; 
+                        if (onEndCallback) onEndCallback(true);
+                    } else {
+                        addSiteLogEntry('site_tts_event_stale', {event: 'onerror_stale', errorCode: errorType, storyId: storyIdToHighlight});
+                    }
+                };
+                try {
+                    speechSynthesis.speak(newUtterance);
+                    addSiteLogEntry('site_tts_action', {action: 'speechSynthesis_speak_called_site', textLen: text.length, voice: newUtterance.voice ? newUtterance.voice.name : 'default'});
+                } catch (e) {
+                    addSiteLogEntry('site_tts_error', { trigger: 'speak_call_exception_site', message: e.toString() });
+                    if (newUtterance === siteCurrentUtterance) siteCurrentUtterance = null;
+                    if (onEndCallback) onEndCallback(true);
+                }
+            }, 250);
+        }
+        
+        function startSitePlayAllStories() {
+            // stopAnySiteTTS is called by the button click handler before this
+            siteIsPlayingAll = true;
+            siteIsPaused = false;
+            document.getElementById('sitePlayPauseBtn').innerHTML = '<i class="fas fa-pause mr-2"></i> Pause All';
+            playNextSiteStory();
+        }
+
+        function playNextSiteStory() {
+            if (siteCurrentStoryIndex >= siteCurrentPastedStories.length || !siteIsPlayingAll) {
+                stopSitePlayAllSequence(true, !siteIsPlayingAll); // If !siteIsPlayingAll, it means it was stopped by user, not end of sequence
+                if (siteCurrentStoryIndex >= siteCurrentPastedStories.length && siteIsPlayingAll) { // Check if it's actually the end of sequence
+                     showModal("Finished playing all stories.");
+                }
+                return;
+            }
+            const story = siteCurrentPastedStories[siteCurrentStoryIndex];
+            addSiteLogEntry('site_tts_play_story', {index: siteCurrentStoryIndex, title: story.title});
+            siteSpeakText(`${story.title}. ${story.summary}`, (err) => {
+                if (!err && siteIsPlayingAll && !siteIsPaused) {
+                    siteCurrentStoryIndex++; 
+                    playNextSiteStory();
+                } else if (err && siteIsPlayingAll) {
+                    stopSitePlayAllSequence(false, true); 
+                }
+            }, story.id);
+        }
+        
+        function stopSitePlayAllSequence(resetIndex = true, calledFromErrorOrEnd = false) {
+            if (!calledFromErrorOrEnd) { 
+                stopAnySiteTTS(true); 
+            } else { 
+                 siteIsPlayingAll = false;
+                 siteIsPaused = false;
+                 const btn = document.getElementById('sitePlayPauseBtn');
+                 if (btn) btn.innerHTML = '<i class="fas fa-play mr-2"></i> Play All';
+            }
+            if (resetIndex) siteCurrentStoryIndex = 0;
+        }
+
+        function pauseSitePlayAllSequence() {
+            if (speechSynthesis.speaking && siteIsPlayingAll && !siteIsPaused && siteCurrentUtterance) {
+                speechSynthesis.pause();
+                siteIsPaused = true;
+                document.getElementById('sitePlayPauseBtn').innerHTML = '<i class="fas fa-play mr-2"></i> Resume All';
+                 addSiteLogEntry('site_tts_action', {action: 'pauseSitePlayAllSequence'});
+            }
+        }
+        function resumeSitePlayAllSequence() {
+            if (siteIsPaused && siteIsPlayingAll) {
+                siteIsPaused = false;
+                document.getElementById('sitePlayPauseBtn').innerHTML = '<i class="fas fa-pause mr-2"></i> Pause All';
+                addSiteLogEntry('site_tts_action', {action: 'resumeSitePlayAllSequence', speaking: speechSynthesis.speaking, paused: speechSynthesis.paused});
+                if (speechSynthesis.paused && siteCurrentUtterance) {
+                    speechSynthesis.resume();
+                } else { 
+                    playNextSiteStory();
+                }
+            }
+        }
+
+        function renderGeneratedNewsSite(stories) {
+            const siteHeaderContainer = document.getElementById('generatedSiteHeader');
+            const siteNewsContainer = document.getElementById('generatedNewsContainer');
+            const siteFooterContainer = document.getElementById('generatedSiteFooter');
+
+            siteHeaderContainer.innerHTML = `
+                <div class="flex flex-col md:flex-row justify-between items-center mb-4 px-4">
+                    <div class="w-full md:w-1/3 mb-4 md:mb-0 md:mr-4">
+                        <label for="siteCustomTextTop" class="block text-sm font-medium text-gray-700 mb-1">Read Custom Text:</label>
+                        <div class="flex">
+                            <input type="text" id="siteCustomTextTop" class="flex-grow p-2 border border-gray-300 rounded-l-md" placeholder="Enter text to read">
+                            <button id="siteReadCustomTextTopBtn" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-r-md flex items-center"><i class="fas fa-volume-up mr-2"></i> Read</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2 mb-4 md:mb-0">
+                        <button id="siteReplayPrevBtn" title="Replay/Previous" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md"><i class="fas fa-backward"></i></button>
+                        <button id="sitePlayPauseBtn" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-md w-32"><i class="fas fa-play mr-2"></i> Play All</button>
+                        <button id="siteNextBtn" title="Next Story" class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-md"><i class="fas fa-forward"></i></button>
+                    </div>
+                    <div class="w-full md:w-1/3 relative md:ml-4">
+                        <div class="flex justify-end mb-2 space-x-2">
+                            <button id="siteToggleLogBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-md text-sm">View Site Log</button>
+                            <button id="siteCopyLogBtn" class="bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-md text-sm">Copy Site Log</button>
+                        </div>
+                        <div id="siteLogContainer" class="hidden bg-white p-3 rounded-md border h-40 overflow-y-auto text-xs">
+                            <p class="text-gray-500 italic">Site log is empty.</p>
+                        </div>
+                         <p class="text-xs text-gray-500 mt-1">Site User ID: <span id="siteGeneratedUserIdDisplay">${formUserId || 'N/A'}</span></p>
+                    </div>
+                </div>`;
+            
+            siteNewsContainer.innerHTML = ''; 
+            stories.forEach((story) => { 
+                const storyCard = document.createElement('article');
+                storyCard.id = `story-card-${story.id}`;
+                storyCard.className = 'bg-white p-6 rounded-lg shadow-md border border-gray-200';
+                storyCard.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="text-xl font-bold text-indigo-600">${story.num}. ${story.title}</h3>
+                        <button class="site-read-story-btn text-sky-600 hover:text-sky-800 p-1" title="Read this story" data-story-id="${story.id}">
+                            <i class="fas fa-volume-up fa-lg"></i>
+                        </button>
+                    </div>
+                    <div class="story-meta mb-1">
+                        <span>Published: ${story.publicationDate}</span> | <span>Source: ${story.source}</span>
+                    </div>
+                    <p class="text-gray-600 mb-4 whitespace-pre-line">${story.summary}</p> 
+                    <div class="flex flex-col sm:flex-row justify-between items-center">
+                        <div class="site-star-rating star-rating mb-3 sm:mb-0" data-story-id="${story.id}" data-story-title="${story.title}">
+                            ${[1,2,3,4,5].map(starNum => `<i class="fas fa-star star" data-value="${starNum}" title="${starNum} star${starNum > 1 ? 's' : ''}"></i>`).join('')}
+                            <span class="ml-2 text-sm text-gray-500" id="site-rating-text-${story.id}">Rate this story</span>
+                        </div>
+                        <button class="site-tell-more-btn bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md text-sm" data-story-id="${story.id}" data-story-title="${story.title}">
+                            <i class="fas fa-info-circle mr-2"></i> Tell Me More
+                        </button>
+                    </div>`;
+                siteNewsContainer.appendChild(storyCard);
+            });
+            
+            siteFooterContainer.innerHTML = `
+                <div class="mb-6">
+                    <label for="sitePersonalThoughts" class="block text-sm font-medium text-gray-700 mb-1">Your Thoughts on these Stories:</label>
+                    <div class="flex">
+                        <input type="text" id="sitePersonalThoughts" class="flex-grow p-2 border border-gray-300 rounded-l-md" placeholder="Add your thoughts...">
+                        <button id="siteSaveThoughtsBtn" class="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-r-md flex items-center"><i class="fas fa-save mr-2"></i> Save</button>
+                    </div>
+                </div>
+                <div>
+                    <label for="siteCustomTextBottom" class="block text-sm font-medium text-gray-700 mb-1">Read Custom Text:</label>
+                    <div class="flex">
+                        <input type="text" id="siteCustomTextBottom" class="flex-grow p-2 border border-gray-300 rounded-l-md" placeholder="Enter text to read">
+                        <button id="siteReadCustomTextBottomBtn" class="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-r-md flex items-center"><i class="fas fa-volume-up mr-2"></i> Read</button>
+                    </div>
+                </div>`;
+
+            initializeGeneratedSiteListenersAndLogic();
+        }
+        
+        function initializeGeneratedSiteListenersAndLogic() {
+            siteDb = formDb; 
+            siteAuth = formAuth; 
+            const siteLogPathId = `generatedSite-${Date.now()}`; 
+            if (formUserId) {
+                 siteLogCollectionRef = collection(siteDb, `artifacts/${baseAppId}-generated/users/${formUserId}/sites/${siteLogPathId}/activityLog`);
+                 addFormLogEntry('generated_site_init', { status: 'Site log path configured', pathId: siteLogPathId });
+                 loadGeneratedSiteLog();
+            } else {
+                addFormLogEntry('generated_site_error', { message: "Cannot init site log, formUserId missing." });
+            }
+
+            siteVoiceLoadAttempted = false; siteVoiceListLogged = false; siteVoices = []; sitePreferredVoice = null;
+            if (typeof speechSynthesis !== 'undefined') {
+                if (speechSynthesis.getVoices().length === 0 && speechSynthesis.onvoiceschanged !== undefined) {
+                    speechSynthesis.onvoiceschanged = () => { if (!siteVoiceLoadAttempted || siteVoices.length === 0) populateSiteVoiceList(); };
+                } else { populateSiteVoiceList(); }
+            }
+
+            const sitePlayPauseBtn = document.getElementById('sitePlayPauseBtn');
+            const siteReplayPrevBtn = document.getElementById('siteReplayPrevBtn');
+            const siteNextBtn = document.getElementById('siteNextBtn');
+
+            if(sitePlayPauseBtn) sitePlayPauseBtn.addEventListener('click', () => {
+                addSiteLogEntry('site_ui_click', {button: 'playPauseBtn', currentIsPlayingAll: siteIsPlayingAll, currentIsPaused: siteIsPaused});
+                stopAnySiteTTS(false); // Crucial: Stop any existing speech before deciding new action
+                if (!siteIsPlayingAll) {
+                    siteCurrentStoryIndex = 0;
+                    startSitePlayAllStories();
+                } else if (siteIsPaused) {
+                    resumeSitePlayAllSequence();
+                } else {
+                    pauseSitePlayAllSequence();
+                }
+            });
+            if(siteReplayPrevBtn) siteReplayPrevBtn.addEventListener('click', () => {
+                addSiteLogEntry('site_ui_click', {button: 'replayPrevBtn'});
+                const now = Date.now();
+                const wasPlaying = siteIsPlayingAll; 
+                stopAnySiteTTS(false); 
+                
+                if (now - siteLastReplayClickTime < 400) { 
+                    siteCurrentStoryIndex = Math.max(0, siteCurrentStoryIndex - 1);
+                }
+                // If it was playing, startSitePlayAllStories will pick up the new/current index.
+                // If not, just highlight.
+                if (wasPlaying && siteCurrentStoryIndex < siteCurrentPastedStories.length) {
+                    startSitePlayAllStories(); 
+                } else if (siteCurrentStoryIndex < siteCurrentPastedStories.length) {
+                    const story = siteCurrentPastedStories[siteCurrentStoryIndex];
+                    if (story) highlightSiteStory(story.id);
+                }
+                siteLastReplayClickTime = now;
+            });
+            if(siteNextBtn) siteNextBtn.addEventListener('click', () => {
+                 addSiteLogEntry('site_ui_click', {button: 'nextBtn'});
+                const wasPlaying = siteIsPlayingAll;
+                stopAnySiteTTS(false); 
+
+                siteCurrentStoryIndex++;
+                if (siteCurrentStoryIndex >= siteCurrentPastedStories.length) {
+                    siteCurrentStoryIndex = siteCurrentPastedStories.length - 1;
+                    if (wasPlaying) stopSitePlayAllSequence(false, true); 
+                    showModal("End of stories.");
+                }
+                if (wasPlaying && siteCurrentStoryIndex < siteCurrentPastedStories.length) {
+                    startSitePlayAllStories(); 
+                } else if (siteCurrentStoryIndex < siteCurrentPastedStories.length) {
+                    const story = siteCurrentPastedStories[siteCurrentStoryIndex];
+                    if(story) highlightSiteStory(story.id);
+                }
+            });
+
+            document.querySelectorAll('#generatedNewsContainer .site-read-story-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    addSiteLogEntry('site_ui_click', {button: 'individualReadStory', storyId: button.dataset.storyId});
+                    stopAnySiteTTS(true); // Stop PlayAll sequence if it was running
+                    
+                    const storyId = button.dataset.storyId;
+                    const storyToRead = siteCurrentPastedStories.find(s => s.id === storyId);
+                    if (storyToRead) {
+                        siteCurrentStoryIndex = siteCurrentPastedStories.indexOf(storyToRead); 
+                        addSiteLogEntry('site_tts_individual_story', { storyId: storyId, title: storyToRead.title });
+                        siteSpeakText(`${storyToRead.title}. ${storyToRead.summary}`, null, storyId);
+                    }
+                });
+            });
+             document.querySelectorAll('#generatedNewsContainer .site-star-rating').forEach(ratingSystem => {
+                const storyId = ratingSystem.dataset.storyId;
+                const storyTitle = ratingSystem.dataset.storyTitle;
+                const stars = ratingSystem.querySelectorAll('.star');
+                const ratingText = document.getElementById(`site-rating-text-${storyId}`);
+
+                stars.forEach(star => {
+                    star.addEventListener('click', () => {
+                        const value = parseInt(star.dataset.value);
+                        addSiteLogEntry('site_rating', { storyId, storyTitle, rating: value });
+                        stars.forEach(s => s.classList.toggle('rated', parseInt(s.dataset.value) <= value));
+                        if(ratingText) ratingText.textContent = `Rated ${value} star${value > 1 ? 's' : ''}!`;
+                    });
+                });
+            });
+            document.querySelectorAll('#generatedNewsContainer .site-tell-more-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    addSiteLogEntry('site_tell_me_more', { storyId: button.dataset.storyId, storyTitle: button.dataset.storyTitle });
+                    showModal(`Tell me more logged for (site): ${button.dataset.storyTitle}`);
+                });
+            });
+            
+            const siteReadCustomTextTopBtn = document.getElementById('siteReadCustomTextTopBtn');
+            if(siteReadCustomTextTopBtn) siteReadCustomTextTopBtn.addEventListener('click', () => {
+                const text = document.getElementById('siteCustomTextTop').value.trim();
+                addSiteLogEntry('site_custom_tts_attempt', { inputField: 'top', textProvidedLength: text.length });
+                stopAnySiteTTS(true); 
+                if (text) { siteSpeakText(text); } 
+                else { showModal("Enter text for site TTS."); }
+            });
+            
+            const siteReadCustomTextBottomBtn = document.getElementById('siteReadCustomTextBottomBtn');
+            if(siteReadCustomTextBottomBtn) siteReadCustomTextBottomBtn.addEventListener('click', () => {
+                const text = document.getElementById('siteCustomTextBottom').value.trim();
+                addSiteLogEntry('site_custom_tts_attempt', { inputField: 'bottom', textProvidedLength: text.length });
+                stopAnySiteTTS(true); 
+                if (text) { siteSpeakText(text); } 
+                else { showModal("Enter text for site TTS."); }
+            });
+
+            const siteSaveThoughtsBtn = document.getElementById('siteSaveThoughtsBtn');
+            if(siteSaveThoughtsBtn) siteSaveThoughtsBtn.addEventListener('click', () => {
+                const text = document.getElementById('sitePersonalThoughts').value.trim();
+                if (text) { 
+                    addSiteLogEntry('site_thought', { text: text }); // Corrected: use 'text' key
+                    document.getElementById('sitePersonalThoughts').value = ''; 
+                    showModal("Site thought saved.");
+                } else { 
+                    showModal("Enter site thought.");
+                }
+            });
+
+            const siteToggleLogBtn = document.getElementById('siteToggleLogBtn');
+            if(siteToggleLogBtn) siteToggleLogBtn.addEventListener('click', () => {
+                const logDiv = document.getElementById('siteLogContainer');
+                logDiv.classList.toggle('hidden');
+                siteToggleLogBtn.textContent = logDiv.classList.contains('hidden') ? 'View Site Log' : 'Hide Site Log';
+            });
+
+            const siteCopyLogBtn = document.getElementById('siteCopyLogBtn');
+            if(siteCopyLogBtn) siteCopyLogBtn.addEventListener('click', () => {
+                const logDiv = document.getElementById('siteLogContainer');
+                const logText = Array.from(logDiv.querySelectorAll('.log-entry')).map(e => e.textContent).join('\n');
+                 if (logText) {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = logText;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        showModal('Site log copied!');
+                    } catch (err) {
+                        showModal('Failed to copy site log. Please try manually.');
+                        addSiteLogEntry('site_ui_error', {action: 'copy_site_log_failed_execCommand', error: err.toString()});
+                    }
+                    document.body.removeChild(textarea);
+                } else {
+                     showModal('Site log is empty.');
+                }
+            });
+
+            function highlightSiteStory(storyId) { 
+                const currentHighlighted = document.querySelector('#generatedNewsContainer .current-story-highlight');
+                if(currentHighlighted) currentHighlighted.classList.remove('current-story-highlight');
+                
+                const elToHighlight = document.getElementById(`story-card-${storyId}`);
+                if(elToHighlight) {
+                    elToHighlight.classList.add('current-story-highlight');
+                    elToHighlight.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                siteCurrentlyHighlightedStoryId = storyId;
+            }
+        } 
+
+        function loadGeneratedSiteLog() { 
+            if (!siteLogCollectionRef) return;
+            const siteLogContainer = document.getElementById('siteLogContainer'); 
+            if (!siteLogContainer) { console.error("Site log container not found for loading."); return; }
+
+            onSnapshot(query(siteLogCollectionRef), (snapshot) => {
+                const entries = [];
+                snapshot.forEach(doc => entries.push({ id: doc.id, ...doc.data() }));
+                entries.sort((a, b) => (b.timestamp?.toDate?.() || 0) - (a.timestamp?.toDate?.() || 0));
+                
+                siteLogContainer.innerHTML = entries.length === 0 ? '<p class="text-gray-500 italic">Site log is empty.</p>' : '';
+                entries.forEach(entry => {
+                    const entryDiv = document.createElement('div');
+                    entryDiv.classList.add('log-entry');
+                    let content = `<span class="font-semibold">${entry.type.toUpperCase()}</span> (${new Date(entry.timestamp?.toDate?.() || Date.now()).toLocaleTimeString('en-US', { hour12: false})}): `;
+                    content += JSON.stringify(entry.details).substring(0,120) + (JSON.stringify(entry.details).length > 120 ? "..." : "");
+                    entryDiv.innerHTML = content;
+                    siteLogContainer.prepend(entryDiv);
+                });
+            }, error => {
+                console.error("Error fetching site log:", error);
+                addSiteLogEntry('site_system_error', {message: 'Error fetching site log', error: error.toString()});
+            });
+        }
+        
+        window.onload = async () => {
+            await initializeFormFirebase();
+        };
+
+    </script>
+</body>
+</html>
