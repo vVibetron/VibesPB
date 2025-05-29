@@ -1,0 +1,121 @@
+/**
+ * @OnlyCurrentDoc
+ * This script combines cell clipping functionality with automatic row insertion.
+ */
+
+// --- Global Configuration ---
+const TARGET_ROW_TO_MONITOR_FOR_INSERTION = 2; // Row to monitor for data entry to trigger insertion
+const ROW_TO_INSERT_ABOVE = 2;                 // New row will be inserted above this row number
+
+/**
+ * Runs when the spreadsheet is opened.
+ * Sets default cell clipping for all existing cells and adds a custom menu.
+ */
+function onOpen() {
+  // Apply clipping to all existing cells on open
+  setDefaultCellClippingToAllSheets();
+
+  // Add a custom menu for manual application
+  SpreadsheetApp.getUi()
+    .createMenu('Formatting')
+    .addItem('Apply Clip to All Cells', 'setDefaultCellClippingToAllSheets') // Ensure this calls the correct function
+    .addToUi();
+}
+
+/**
+ * Runs when a user edits the spreadsheet.
+ * Handles cell clipping for the edited range and automatic row insertion.
+ * @param {Object} e The event object passed by Google Sheets.
+ */
+function onEdit(e) {
+  if (!e) {
+    console.error("onEdit event object is undefined. Cannot proceed.");
+    return;
+  }
+
+  // --- Part 1: Apply Cell Clipping to the Edited Range ---
+  if (e.range) {
+    try {
+      setDefaultCellClippingForRange(e.range);
+      // console.log(`Clipping applied to range: ${e.range.getA1Notation()}`); // Optional: for debugging
+    } catch (clipError) {
+      console.error(`Error applying clipping to range ${e.range.getA1Notation()}: ${clipError.toString()}${clipError.stack ? ('\nStack: ' + clipError.stack) : ''}`);
+    }
+  } else {
+    console.warn("onEdit event did not provide a range. Skipping cell clipping for this edit.");
+  }
+
+  // --- Part 2: Add a new row if data is pasted/entered into the target row ---
+  // Ensure e.range is valid before proceeding with row insertion logic
+  if (e.range) {
+    const sheet = e.range.getSheet();
+    const editedRange = e.range;
+    const firstEditedRow = editedRange.getRow();
+    const lastEditedRow = editedRange.getLastRow(); // Handles pastes spanning multiple rows
+
+    // Check if the edit (typing or pasting) intersects with our target row
+    if (firstEditedRow <= TARGET_ROW_TO_MONITOR_FOR_INSERTION && lastEditedRow >= TARGET_ROW_TO_MONITOR_FOR_INSERTION) {
+      let rowTargetNowHasData = false;
+      const firstEditedCol = editedRange.getColumn();
+      const lastEditedCol = editedRange.getLastColumn();
+
+      // Iterate through the columns that were part of the edit within the target row
+      for (let col = firstEditedCol; col <= lastEditedCol; col++) {
+        // Ensure we don't try to get a range outside the sheet's column limits
+        if (col <= sheet.getMaxColumns()) {
+          if (sheet.getRange(TARGET_ROW_TO_MONITOR_FOR_INSERTION, col).getValue().toString().trim() !== "") {
+            rowTargetNowHasData = true;
+            break; // Found data in the target row within the edited/pasted range
+          }
+        }
+      }
+
+      if (rowTargetNowHasData) {
+        try {
+          sheet.insertRowBefore(ROW_TO_INSERT_ABOVE);
+          // console.log(`New row inserted above row ${ROW_TO_INSERT_ABOVE} in sheet: ${sheet.getName()}`); // Optional
+          // SpreadsheetApp.getActiveSpreadsheet().toast('New row added automatically.'); // Optional user feedback
+        } catch (insertError) {
+          console.error(`Error inserting row in sheet ${sheet.getName()}: ${insertError.toString()}${insertError.stack ? ('\nStack: ' + insertError.stack) : ''}`);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Sets the text wrapping strategy to CLIP for all cells in all sheets
+ * of the active spreadsheet.
+ */
+function setDefaultCellClippingToAllSheets() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = spreadsheet.getSheets();
+
+  sheets.forEach(sheet => {
+    try {
+      const dataRange = sheet.getDataRange();
+      if (dataRange.getWidth() > 0 && dataRange.getHeight() > 0) { // Ensure there's actual data
+        dataRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+      }
+      // console.log(`Default clipping applied to all cells in sheet: ${sheet.getName()}`); // Optional
+    } catch (error) {
+      console.error(`Error setting default clipping for sheet ${sheet.getName()}: ${error.toString()}${error.stack ? ('\nStack: ' + error.stack) : ''}`);
+    }
+  });
+}
+
+/**
+ * Sets the text wrapping strategy to CLIP for the cells in the specified range.
+ * @param {GoogleAppsScript.Spreadsheet.Range} range The range to apply clipping to.
+ */
+function setDefaultCellClippingForRange(range) {
+  if (range) {
+    try {
+      range.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+    } catch (error) {
+      console.error(`Error setting clipping for range ${range.getA1Notation()}: ${error.toString()}${error.stack ? ('\nStack: ' + error.stack) : ''}`);
+    }
+  } else {
+    console.warn("setDefaultCellClippingForRange called with an undefined range.");
+  }
+}
