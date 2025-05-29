@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Code Modification Analysis (TTS - Separate Buttons)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* Tailwind gray-900 */
+            color: #d1d5db; /* Tailwind gray-300 */
+            line-height: 1.7;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #1f2937; /* Tailwind gray-800 */
+            border-radius: 0.75rem; /* Tailwind rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .log-controls {
+            max-width: 800px;
+            margin: 1rem auto;
+            padding: 0.5rem 2rem;
+            display: flex;
+            flex-wrap: wrap; /* Allow buttons to wrap */
+            gap: 0.5rem;
+            align-items: center;
+        }
+        #logArea {
+            width: calc(100% - 4rem);
+            max-width: 736px;
+            height: 150px;
+            margin: 0.5rem auto 1rem auto;
+            padding: 0.5rem;
+            background-color: #000;
+            color: #0f0;
+            border: 1px solid #374151; /* Tailwind gray-700 */
+            border-radius: 0.375rem; /* Tailwind rounded-md */
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            white-space: pre-wrap;
+            overflow-y: scroll;
+        }
+        h1 {
+            color: #f3f4f6;
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        h2 {
+            color: #9ca3af;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid #374151;
+            padding-bottom: 0.5rem;
+        }
+        p {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+        .control-button {
+            background-color: #4b5563; /* Tailwind gray-600 */
+            color: white;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-bottom: 0.5rem; /* Add margin for wrapping */
+        }
+        .control-button:hover {
+            background-color: #6b7280; /* Tailwind gray-500 */
+        }
+        #initSpeechButton {
+            background-color: #ca8a04; /* Tailwind yellow-500 */
+        }
+        #initSpeechButton:hover {
+            background-color: #a16207; /* Tailwind yellow-600 */
+        }
+        .tts-button-group button {
+            color: white;
+            font-weight: 500;
+            padding: 0.6rem 1.2rem;
+            border-radius: 0.375rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease, opacity 0.3s ease;
+            margin-top: 0.5rem;
+            margin-right: 0.5rem; 
+            display: inline-flex;
+            align-items: center;
+        }
+        .tts-button-group button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .start-tts-button {
+            background-color: #10b981; /* Green */
+        }
+        .start-tts-button:hover:not(:disabled) {
+            background-color: #059669;
+        }
+        .stop-tts-button {
+            background-color: #ef4444; /* Red */
+        }
+        .stop-tts-button:hover:not(:disabled) {
+            background-color: #dc2626;
+        }
+        .tts-button-group button svg {
+            margin-right: 0.5rem;
+        }
+        .footer-note {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: 2.5rem;
+            text-align: center;
+            border-top: 1px solid #374151;
+            padding-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="log-controls">
+        <button id="initSpeechButton" class="control-button">Initialize Speech Engine</button>
+        <button id="toggleLogButton" class="control-button">View Log</button>
+        <button id="copyLogButton" class="control-button">Copy Log</button>
+    </div>
+    <textarea id="logArea" readonly style="display: none;"></textarea>
+
+    <div class="container">
+        <h1>Modifying Game Source Code: An Analysis</h1>
+
+        <section id="capabilities-section">
+            <h2>My Capabilities</h2>
+            <p id="capabilities-text">
+                If you provide me with game source code, I can assist with several types of modifications, especially if they are well-defined and don't require a deep, nuanced understanding of complex, undocumented game mechanics or design intent. I can help refactor code for better readability or structure, change game parameters like speed, difficulty levels, or color schemes if they are clearly accessible in the code. I can also assist in modifying or replacing text content, simple UI elements if their implementation is straightforward, or even implement small, new features if they are based on existing patterns within the codebase and your instructions are very precise. For example, I could help change scoring rules, adjust enemy behavior based on existing logic, or add variations to existing levels if the level data format is clear.
+            </p>
+            <div class="tts-button-group">
+                <button id="start-capabilities-tts" class="start-tts-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.3 2.841A1.5 1.5 0 0 0 4 4.11V15.89a1.5 1.5 0 0 0 2.3 1.269l9.344-5.89a1.5 1.5 0 0 0 0-2.538L6.3 2.84Z" /></svg>
+                    Start Reading
+                </button>
+                <button id="stop-capabilities-tts" class="stop-tts-button" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M5.5 5.5A.5.5 0 0 1 6 5h8a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5v-8Z" /></svg>
+                    Stop Reading
+                </button>
+            </div>
+        </section>
+
+        <section id="limitations-section">
+            <h2>My Limitations</h2>
+            <p id="limitations-text">
+                While I can modify code, I don't "understand" it in a human sense, especially the creative or experiential aspects of game design. Creating a truly "original game" involves significant design choices, artistic vision, and an understanding of player experience, which are beyond my capabilities. I cannot create new complex graphical assets, compose original music, or debug deeply nested logical errors in a large, unfamiliar codebase without very specific guidance. My modifications are based on pattern recognition and the instructions you provide; I cannot intuit game balance, ensure "fun factor," or make high-level architectural decisions for a game. Furthermore, if the code is poorly documented, highly obfuscated, or relies on external libraries or engine features I'm not trained on, my ability to make meaningful modifications will be significantly restricted.
+            </p>
+            <div class="tts-button-group">
+                <button id="start-limitations-tts" class="start-tts-button">
+                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M6.3 2.841A1.5 1.5 0 0 0 4 4.11V15.89a1.5 1.5 0 0 0 2.3 1.269l9.344-5.89a1.5 1.5 0 0 0 0-2.538L6.3 2.84Z" /></svg>
+                    Start Reading
+                </button>
+                <button id="stop-limitations-tts" class="stop-tts-button" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M5.5 5.5A.5.5 0 0 1 6 5h8a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5v-8Z" /></svg>
+                    Stop Reading
+                </button>
+            </div>
+        </section>
+
+        <div class="footer-note">
+            Text-to-speech uses your browser's Web Speech API. The availability of specific voices (like "Samantha") depends on your system's installed voices. A default female voice will be used if the preferred one is not found.
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const textElements = {
+                capabilities: document.getElementById('capabilities-text'),
+                limitations: document.getElementById('limitations-text')
+            };
+            const startButtons = {
+                capabilities: document.getElementById('start-capabilities-tts'),
+                limitations: document.getElementById('start-limitations-tts')
+            };
+            const stopButtons = {
+                capabilities: document.getElementById('stop-capabilities-tts'),
+                limitations: document.getElementById('stop-limitations-tts')
+            };
+            
+            const initSpeechButton = document.getElementById('initSpeechButton');
+            const toggleLogButton = document.getElementById('toggleLogButton');
+            const copyLogButton = document.getElementById('copyLogButton');
+            const logArea = document.getElementById('logArea');
+            let logEntries = [];
+
+            function appLog(message, data = null) {
+                const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+                let logMessage = `[${timestamp}] ${message}`;
+                if (data !== null && data !== undefined) {
+                    try {
+                        logMessage += ` | Data: ${JSON.stringify(data, (key, value) => {
+                            if (value instanceof SpeechSynthesisVoice) { 
+                                return { name: value.name, lang: value.lang, default: value.default, localService: value.localService, voiceURIValue: value.voiceURI };
+                            }
+                            return value;
+                        }, 2)}`;
+                    } catch (e) {
+                        logMessage += ` | Data: (Error serializing data - ${e.message})`;
+                    }
+                }
+                logEntries.push(logMessage);
+                console.log(message, data !== null && data !== undefined ? data : ''); 
+                if (logArea && logArea.style.display !== 'none') {
+                    logArea.value = logEntries.join('\n') + '\n';
+                    logArea.scrollTop = logArea.scrollHeight; 
+                }
+            }
+
+            if (toggleLogButton && logArea) {
+                toggleLogButton.addEventListener('click', () => {
+                    logArea.style.display = (logArea.style.display === 'none') ? 'block' : 'none';
+                    toggleLogButton.textContent = (logArea.style.display === 'none') ? 'View Log' : 'Hide Log';
+                    if (logArea.style.display === 'block') {
+                        logArea.value = logEntries.join('\n') + '\n';
+                        logArea.scrollTop = logArea.scrollHeight;
+                    }
+                    appLog(`Log viewer ${(logArea.style.display === 'none') ? 'hidden' : 'shown'}.`);
+                });
+            }
+
+            if (copyLogButton && logArea) {
+                copyLogButton.addEventListener('click', () => { 
+                    const logText = logEntries.join('\n');
+                    if (!logText) {
+                        appLog('Copy Log: No log entries to copy.');
+                        alert('Log is empty.');
+                        return;
+                    }
+                    navigator.clipboard.writeText(logText).then(() => {
+                        appLog('Log content copied to clipboard.');
+                        alert('Log copied to clipboard!');
+                    }).catch(err => {
+                        appLog('Copy Log: Failed to copy using navigator.clipboard. Trying fallback.', { error: err.message });
+                        try {
+                            const tempTextArea = document.createElement('textarea');
+                            tempTextArea.value = logText;
+                            document.body.appendChild(tempTextArea);
+                            tempTextArea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(tempTextArea);
+                            appLog('Log content copied to clipboard using fallback.');
+                            alert('Log copied to clipboard (using fallback)!');
+                        } catch (fallbackErr) {
+                            appLog('Copy Log: Fallback copy method also failed.', { error: fallbackErr.message });
+                            alert('Failed to copy log. Please select and copy manually from the log area if visible.');
+                        }
+                    });
+                });
+            }
+
+            let preferredVoice = null;
+            const synth = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+            let voicesLoadedSuccessfully = false; 
+            let voiceLoadInterval = null;
+            let currentSpeakingKey = null; 
+            let speechEngineInitialized = false;
+            let wasInterruptedByUser = false; // Flag to distinguish user stop from other errors
+
+            function updateButtonStates(key, isSpeaking) {
+                if (startButtons[key] && stopButtons[key]) {
+                    startButtons[key].disabled = isSpeaking;
+                    stopButtons[key].disabled = !isSpeaking;
+                    appLog(`Buttons updated for '${key}': Start ${isSpeaking ? 'disabled' : 'enabled'}, Stop ${!isSpeaking ? 'disabled' : 'enabled'}`);
+                }
+            }
+            
+            function resetAllButtonStates(exceptKey = null) {
+                appLog('Resetting TTS button states.', { exceptKey });
+                for (const key in startButtons) {
+                    if (key !== exceptKey) {
+                        updateButtonStates(key, false);
+                    }
+                }
+                if (!exceptKey) { 
+                    currentSpeakingKey = null;
+                }
+            }
+            
+            function processVoices(fromEvent = false) {
+                const voices = synth.getVoices();
+                appLog(`processVoices called (fromEvent: ${fromEvent}). Number of voices found: ${voices.length}`);
+                if (voices.length > 0) {
+                    if (!voicesLoadedSuccessfully) {
+                        appLog('Available voices:', voices.map(v => ({ name: v.name, lang: v.lang, default: v.default, localService: v.localService, voiceURI: v.voiceURI })));
+                    }
+                    voicesLoadedSuccessfully = true;
+                    findSamanthaVoice(voices);
+                    appLog('Voices processed and preferred voice set (if found).');
+                    if (voiceLoadInterval) {
+                        clearInterval(voiceLoadInterval);
+                        voiceLoadInterval = null;
+                        appLog('Cleared voice loading interval because voices were found.');
+                    }
+                } else {
+                    appLog('No voices found by processVoices. voicesLoadedSuccessfully remains false.');
+                }
+            };
+
+            function initSpeechSystemInternal() {
+                if (!synth) {
+                    appLog('Web Speech API (Text-to-Speech) is not supported in this browser.', { apiAvailable: false });
+                    Object.values(startButtons).concat(Object.values(stopButtons)).forEach(btn => {
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.title = 'Text-to-speech is not supported in your browser.';
+                            if (!btn.textContent.includes('(TTS Not Supported)')) {
+                                 btn.textContent = btn.textContent.replace(/^(Start|Stop) Reading/, '$1 Reading (TTS Not Supported)');
+                            }
+                        }
+                    });
+                    if(initSpeechButton) initSpeechButton.disabled = true;
+                    return false;
+                }
+                appLog('Web Speech API is supported. Initializing voices...');
+                
+                synth.onvoiceschanged = () => {
+                    appLog('`onvoiceschanged` event fired.');
+                    processVoices(true);
+                };
+
+                const initialVoices = synth.getVoices();
+                if (initialVoices.length > 0) {
+                     appLog('Voices were available synchronously on init. Processing them.');
+                    processVoices(false);
+                } else {
+                    appLog('Voices not immediately available on init. Relying on `onvoiceschanged` and/or polling.');
+                    let attempts = 0;
+                    if (!voiceLoadInterval && !voicesLoadedSuccessfully) { 
+                        appLog('Starting voice loading polling interval.');
+                        voiceLoadInterval = setInterval(() => {
+                            attempts++;
+                            appLog(`Voice loading poll attempt #${attempts}`);
+                            const currentVoices = synth.getVoices();
+                            if (currentVoices.length > 0) {
+                                processVoices(false); 
+                            } else if (attempts >= 15) { 
+                                clearInterval(voiceLoadInterval);
+                                voiceLoadInterval = null;
+                                appLog('Stopped polling for voices after 15 attempts. No voices found.');
+                                if (!voicesLoadedSuccessfully) {
+                                     alert('Could not load text-to-speech voices after several attempts. TTS might not work.');
+                                }
+                            }
+                        }, 500);
+                    }
+                }
+                return true;
+            }
+
+            function findSamanthaVoice(voices) {
+                appLog('Attempting to find "Samantha" or suitable fallback voice. Prioritizing local voices.');
+                const localVoices = voices.filter(v => v.localService);
+                const networkVoices = voices.filter(v => !v.localService);
+
+                const searchOrder = [
+                    localVoices.find(voice => voice.name.toLowerCase().includes('samantha') && voice.lang.startsWith('en')),
+                    ...['zira', 'susan', 'female', 'woman'].flatMap(name => 
+                        localVoices.find(voice => voice.name.toLowerCase().includes(name) && voice.lang.startsWith('en'))
+                    ),
+                    localVoices.find(voice => voice.lang.startsWith('en') && voice.default),
+                    localVoices.find(voice => voice.lang.startsWith('en')),
+                    networkVoices.find(voice => voice.name.toLowerCase().includes('samantha') && voice.lang.startsWith('en')),
+                     ...['female', 'woman'].flatMap(name =>
+                        networkVoices.find(voice => voice.name.toLowerCase().includes(name) && voice.lang.startsWith('en'))
+                    ),
+                    networkVoices.find(voice => voice.lang.startsWith('en') && voice.default),
+                    networkVoices.find(voice => voice.lang.startsWith('en')),
+                    voices.length > 0 ? voices[0] : null
+                ];
+
+                for (const voice of searchOrder) {
+                    if (voice) {
+                        preferredVoice = voice;
+                        appLog('Selected voice:', { name: preferredVoice.name, lang: preferredVoice.lang, local: preferredVoice.localService });
+                        return;
+                    }
+                }
+                appLog('No suitable voice found after checking all criteria.');
+                preferredVoice = null;
+            }
+            
+            function manuallyInitializeSpeechEngine() {
+                appLog('ManuallyInitializeSpeechEngine called.');
+                if (!synth) {
+                    appLog('Cannot initialize: Speech API not supported.');
+                    alert('Speech API not supported in this browser.');
+                    return;
+                }
+                if (speechEngineInitialized) {
+                    appLog('Speech engine already marked as initialized by user action.');
+                    alert('Speech engine has already been initialized.');
+                    return;
+                }
+
+                if (synth.getVoices().length === 0 && !voicesLoadedSuccessfully) {
+                    appLog('No voices loaded yet. Attempting to trigger voice loading via onvoiceschanged or polling.');
+                    initSpeechSystemInternal(); 
+                    alert('Attempting to load voices. Please wait a moment and try initializing again if it fails, or try reading directly.');
+                    return; 
+                } else if (!voicesLoadedSuccessfully && synth.getVoices().length > 0) {
+                    appLog('Voices available but not processed; processing now.');
+                    processVoices(false);
+                }
+
+                appLog('Attempting a silent warmup utterance to initialize audio context.');
+                const warmupUtterance = new SpeechSynthesisUtterance(' '); 
+                warmupUtterance.volume = 0; 
+                warmupUtterance.rate = 10; 
+                
+                if (preferredVoice) {
+                    warmupUtterance.voice = preferredVoice;
+                    warmupUtterance.lang = preferredVoice.lang;
+                } else if (voicesLoadedSuccessfully && synth.getVoices().length > 0) {
+                    const firstEngVoice = synth.getVoices().find(v => v.lang.startsWith('en')) || synth.getVoices()[0];
+                    if (firstEngVoice) {
+                        warmupUtterance.voice = firstEngVoice;
+                        warmupUtterance.lang = firstEngVoice.lang;
+                         appLog('Using first available English (or any) voice for warmup.', {voice: firstEngVoice.name});
+                    } else {
+                         warmupUtterance.lang = 'en-US';
+                         appLog('No voices for warmup, using lang en-US.');
+                    }
+                } else {
+                    warmupUtterance.lang = 'en-US'; 
+                    appLog('No specific voice for warmup, using lang en-US.');
+                }
+
+                let warmupStarted = false;
+                warmupUtterance.onstart = () => {
+                    warmupStarted = true;
+                    appLog('Warmup utterance started successfully.');
+                    speechEngineInitialized = true; 
+                    alert('Speech engine initialized. You should now be able to use the "Start Reading" buttons.');
+                };
+                warmupUtterance.onend = () => {
+                    appLog('Warmup utterance ended.');
+                    if (!warmupStarted && !speechEngineInitialized) { 
+                        appLog('Warmup onend fired but onstart did not, marking engine as initialized if not already.');
+                        speechEngineInitialized = true;
+                        alert('Speech engine initialization attempt completed. You can now try reading.');
+                    }
+                };
+                warmupUtterance.onerror = (event) => {
+                    appLog('Warmup utterance error.', { error: event.error, eventDetails: event });
+                    console.error('Warmup Utterance Error:', event);
+                    alert(`Failed to initialize speech engine: ${event.error || 'Unknown error'}. TTS might not work. Check logs.`);
+                    speechEngineInitialized = false; 
+                };
+
+                try {
+                    if (synth.speaking || synth.pending) {
+                        appLog("Synth busy during warmup, cancelling existing speech.");
+                        synth.cancel(); 
+                        setTimeout(() => { 
+                            appLog("Retrying warmup after cancel.");
+                            synth.speak(warmupUtterance);
+                        }, 150);
+                    } else {
+                        synth.speak(warmupUtterance);
+                    }
+                } catch (e) {
+                    appLog('Error caught during warmup synth.speak() call.', { error: e.message });
+                    alert('An error occurred while trying to initialize the speech engine.');
+                    speechEngineInitialized = false;
+                }
+            }
+            
+            if(initSpeechButton) {
+                initSpeechButton.addEventListener('click', manuallyInitializeSpeechEngine);
+            }
+            initSpeechSystemInternal();
+
+
+            function executeSpeak(utterance, key) {
+                appLog(`executeSpeak called for key: '${key}'`);
+                
+                if (synth.paused) { 
+                    appLog('Synth was paused, calling resume.');
+                    try { synth.resume(); } catch(e){ appLog('Error resuming synth', {error: e.message});}
+                }
+                
+                appLog('Utterance properties before speak:', {
+                    text: utterance.text.substring(0, 50) + (utterance.text.length > 50 ? '...' : ''),
+                    lang: utterance.lang,
+                    voice: utterance.voice ? { name: utterance.voice.name, lang: utterance.voice.lang, localService: utterance.voice.localService } : 'System Default',
+                    rate: utterance.rate,
+                    pitch: utterance.pitch,
+                    volume: utterance.volume
+                });
+
+                utterance.onstart = () => {
+                    appLog(`Speech started for key: '${key}' (utterance.onstart)`);
+                    updateButtonStates(key, true);
+                    currentSpeakingKey = key;
+                    wasInterruptedByUser = false; // Reset this flag at the start of new speech
+                };
+
+                utterance.onend = () => {
+                    appLog(`Speech ended for key: '${key}' (utterance.onend). Current speaking key: ${currentSpeakingKey}`);
+                    updateButtonStates(key, false);
+                    if (currentSpeakingKey === key) {
+                       currentSpeakingKey = null;
+                    }
+                    wasInterruptedByUser = false; // Reset flag
+                };
+
+                utterance.onerror = (event) => {
+                    if (wasInterruptedByUser && (event.error === 'canceled' || event.error === 'interrupted')) {
+                        appLog(`Speech for key '${key}' was intentionally stopped by user (onerror: ${event.error}).`);
+                        // UI reset is handled by onend which should still fire after cancel.
+                    } else {
+                        let errorDetails = { 
+                            key: key, error: event.error || 'N/A', type: event.type, isTrusted: event.isTrusted,
+                            utteranceTextStart: event.utterance ? event.utterance.text.substring(0,30) : 'N/A',
+                            charIndex: event.charIndex, elapsedTime: event.elapsedTime, name: event.name
+                        };
+                        for (const prop in event) {
+                            if (Object.prototype.hasOwnProperty.call(event, prop) && typeof event[prop] !== 'function' && typeof event[prop] !== 'object') {
+                               if (!errorDetails.hasOwnProperty(prop)) errorDetails[prop] = event[prop];
+                            }
+                        }
+                        appLog('Speech error (utterance.onerror).', errorDetails);
+                        console.error(`SpeechSynthesisUtterance.onerror for ${key}:`, event);
+                        alert(`Error during speech synthesis for ${key}: ${event.error || 'Unknown TTS error'}. See log and browser console.`);
+                    }
+                    // Ensure UI is reset regardless of error type if it was the current speaker
+                    updateButtonStates(key, false); 
+                    if (currentSpeakingKey === key) {
+                       currentSpeakingKey = null;
+                    }
+                    wasInterruptedByUser = false; // Reset flag
+                };
+                
+                appLog(`Calling synth.speak() for key: '${key}'`);
+                try {
+                    synth.speak(utterance);
+                } catch (e) {
+                    appLog(`Error caught directly from synth.speak() for key '${key}'`, { error: e.message, stack: e.stack });
+                    alert(`Unexpected error trying to speak for ${key}. Check console and logs.`);
+                    updateButtonStates(key, false);
+                     if (currentSpeakingKey === key) {
+                       currentSpeakingKey = null;
+                    }
+                }
+            }
+
+            function startReading(key) {
+                appLog(`startReading called for key: '${key}'`);
+                if (!synth || !textElements[key] || !startButtons[key] || !stopButtons[key]) {
+                    appLog('startReading: Prerequisites failed.', { key, synthExists: !!synth, textElExists: !!textElements[key] });
+                    return;
+                }
+
+                if (!speechEngineInitialized) {
+                     appLog('startReading: Speech engine not explicitly initialized by user. Please click "Initialize Speech Engine" first.');
+                     alert('Please click "Initialize Speech Engine" first to enable text-to-speech.');
+                     return;
+                }
+                if (!voicesLoadedSuccessfully && synth.getVoices().length === 0) {
+                    appLog('startReading: Voices not loaded. Attempting re-init.', { key });
+                    initSpeechSystemInternal(); 
+                    alert('Text-to-speech voices are initializing. Please wait a moment and try again.');
+                    return;
+                }
+                
+                wasInterruptedByUser = false; // Reset flag before new speech attempt
+                // Always cancel any ongoing or pending speech before starting new.
+                if (synth.speaking || synth.pending) {
+                    appLog(`startReading for '${key}': Synth is speaking or pending. Cancelling all speech first to ensure clean state.`);
+                    synth.cancel(); // This should trigger onend for the previous utterance.
+                }
+                
+                // Reset button states for ALL sections immediately.
+                // The 'onend' of a previously cancelled utterance will also try to reset its specific buttons, which is fine.
+                resetAllButtonStates(); 
+
+                setTimeout(() => {
+                    appLog(`Delayed execution after cancel for key '${key}'. Synth state - speaking: ${synth.speaking}, pending: ${synth.pending}`);
+                    
+                    if (synth.speaking || synth.pending) {
+                        appLog(`Synth still speaking/pending after cancel and delay for key '${key}'. This is unusual but trying to cancel again.`);
+                        synth.cancel(); 
+                        setTimeout(() => { 
+                             if (synth.speaking || synth.pending) {
+                                appLog(`Synth is stuck in speaking/pending state for key '${key}' after multiple cancels. Aborting speech attempt.`);
+                                alert("The speech engine seems busy or stuck. Please try again later.");
+                                resetAllButtonStates(); 
+                                return;
+                             }
+                             proceedWithSpeech(key);
+                        }, 200); 
+                        return;
+                    }
+                    proceedWithSpeech(key);
+                }, 250); // Delay to allow synth.cancel() and its onend events to fully process.
+            }
+
+            function proceedWithSpeech(key) {
+                appLog(`proceedWithSpeech for key '${key}'`);
+                const rawText = textElements[key].textContent;
+                const textToSpeak = rawText.trim();
+
+                if (!textToSpeak) {
+                    appLog('No text content to speak for key (after trim): ' + key);
+                    updateButtonStates(key, false); 
+                    return;
+                }
+
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                if (preferredVoice) {
+                    utterance.voice = preferredVoice;
+                    utterance.lang = preferredVoice.lang; 
+                } else {
+                    utterance.lang = 'en-US'; 
+                    appLog('No preferred voice for utterance, using lang en-US and system default voice for key: ' + key);
+                }
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+
+                executeSpeak(utterance, key);
+            }
+
+
+            function stopReading(key) {
+                appLog(`stopReading called for key: '${key}'`);
+                if (synth) {
+                    if (synth.speaking || synth.pending) {
+                        appLog(`Stopping all speech due to stop request for key: '${key}'`);
+                        wasInterruptedByUser = true; // Set flag before calling cancel
+                        synth.cancel(); // This will trigger onend (and potentially onerror with "canceled") for the current utterance.
+                    } else {
+                         appLog(`Stop called for '${key}', but synth is not speaking or pending. Ensuring buttons for this key are reset.`);
+                         updateButtonStates(key, false);
+                    }
+                } else {
+                     appLog(`Stop called for '${key}', but synth is not available.`);
+                     updateButtonStates(key, false); 
+                }
+                // The onend/onerror of the cancelled utterance should handle resetting currentSpeakingKey.
+                // We explicitly ensure the clicked stop button's pair is visually reset.
+                // updateButtonStates(key, false); // This is handled by onend/onerror
+            }
+
+            // Attach event listeners
+            for (const key in startButtons) {
+                if (startButtons[key] && textElements[key]) {
+                    startButtons[key].addEventListener('click', () => startReading(key));
+                }
+                if (stopButtons[key]) {
+                    stopButtons[key].addEventListener('click', () => stopReading(key));
+                }
+            }
+            
+            appLog('DOM fully loaded and event listeners attached.');
+            resetAllButtonStates(); 
+        });
+    </script>
+</body>
+</html>
