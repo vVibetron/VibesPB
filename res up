@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Resizer (50% Larger & JPG)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            padding: 20px;
+            box-sizing: border-box;
+            color: #333;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 25px;
+        }
+        input[type="file"] {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        input[type="file"]::file-selector-button {
+            margin-right: 10px;
+            padding: 8px 12px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #1558b0;
+        }
+        p {
+            font-size: 0.9em;
+            color: #555;
+        }
+        #previewContainer {
+            margin-top: 20px;
+            border: 1px dashed #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #previewImage {
+            max-width: 100%;
+            max-height: 200px;
+            display: none; /* Hidden until an image is loaded */
+        }
+        #status {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        #errorMessage {
+            margin-top: 15px;
+            font-weight: bold;
+            color: #dc3545;
+        }
+        canvas {
+            display: none; /* Canvas is used for processing, not display */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Resizer & Converter</h1>
+        <p>Choose an image file. It will be resized to be 50% larger and automatically downloaded as a JPG.</p>
+        
+        <input type="file" id="imageLoader" name="imageLoader" accept="image/*">
+        
+        <div id="previewContainer">
+            <img id="previewImage" src="#" alt="Image preview" />
+            <p id="previewPlaceholder" style="color: #aaa;">Image preview will appear here</p>
+        </div>
+        
+        <p id="status"></p>
+        <p id="errorMessage"></p>
+    </div>
+
+    <canvas id="imageCanvas"></canvas>
+
+    <script>
+        const imageLoader = document.getElementById('imageLoader');
+        const previewImage = document.getElementById('previewImage');
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const imageCanvas = document.getElementById('imageCanvas');
+        const statusElement = document.getElementById('status');
+        const errorElement = document.getElementById('errorMessage');
+
+        imageLoader.addEventListener('change', function(event) {
+            statusElement.textContent = ''; // Clear previous status
+            errorElement.textContent = ''; // Clear previous error
+            previewImage.style.display = 'none';
+            previewPlaceholder.style.display = 'block';
+
+            const file = event.target.files[0];
+            if (!file) {
+                errorElement.textContent = 'No file selected.';
+                return;
+            }
+
+            if (!file.type.startsWith('image/')) {
+                errorElement.textContent = 'Invalid file type. Please select an image.';
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                previewImage.src = e.target.result;
+                previewImage.style.display = 'block';
+                previewPlaceholder.style.display = 'none';
+                statusElement.textContent = 'Processing...';
+
+                const img = new Image();
+                img.onload = function() {
+                    try {
+                        const originalWidth = img.width;
+                        const originalHeight = img.height;
+
+                        const newWidth = originalWidth * 1.5;
+                        const newHeight = originalHeight * 1.5;
+
+                        imageCanvas.width = newWidth;
+                        imageCanvas.height = newHeight;
+
+                        const ctx = imageCanvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+                        // Convert canvas to JPG data URL
+                        // The second argument to toDataURL is the quality (0.0 to 1.0) for JPG/WEBP.
+                        const dataURL = imageCanvas.toDataURL('image/jpeg', 0.92); // Using 0.92 for good quality
+
+                        // Create a link to download the image
+                        const downloadLink = document.createElement('a');
+                        
+                        // Create a filename
+                        let originalFileName = file.name.substring(0, file.name.lastIndexOf('.'));
+                        if (!originalFileName) originalFileName = 'resized_image';
+                        downloadLink.download = originalFileName + '_resized_50pct.jpg';
+                        
+                        downloadLink.href = dataURL;
+                        
+                        // Append link to body, click it, then remove it
+                        document.body.appendChild(downloadLink);
+                        downloadLink.click();
+                        document.body.removeChild(downloadLink);
+
+                        statusElement.textContent = 'Image processed and download started!';
+                        console.log(`Image resized: Original ${originalWidth}x${originalHeight}, New ${newWidth}x${newHeight}`);
+                    } catch (err) {
+                        console.error("Error during image processing: ", err);
+                        errorElement.textContent = 'Error processing image. Check console for details.';
+                        statusElement.textContent = '';
+                    } finally {
+                        // Clear the input field so the same file can be re-selected if needed
+                        imageLoader.value = null; 
+                    }
+                };
+                img.onerror = function() {
+                    console.error("Error loading image into Image object.");
+                    errorElement.textContent = 'Could not load the selected image file.';
+                    statusElement.textContent = '';
+                    imageLoader.value = null; 
+                };
+                img.src = e.target.result; // This is the data URL from FileReader
+            };
+            
+            reader.onerror = function() {
+                console.error("Error reading file.");
+                errorElement.textContent = 'Error reading the selected file.';
+                statusElement.textContent = '';
+                imageLoader.value = null;
+            };
+
+            reader.readAsDataURL(file);
+        });
+    </script>
+</body>
+</html>
