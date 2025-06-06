@@ -1,0 +1,183 @@
+/**
+ * @OnlyCurrentDoc
+ * This script combines two functionalities for specific sheets:
+ * 1. Automatically changes the background and text color of a row based on a value in Column L.
+ * 2. Automatically inserts a new row above row 2 when any data is entered or pasted into row 2.
+ * It also applies a 'Clip' text strategy to all edited cells.
+ */
+
+// --- CONFIGURATION ---
+// Add the exact names of the sheets you want this script to work on.
+// Example: const AFFECTED_SHEETS = ["Leads", "Prospects", "Follow-up"];
+const AFFECTED_SHEETS = ["Sheet1"]; // <--- IMPORTANT: CHANGE "Sheet1" TO YOUR SHEET NAME(S)
+
+const STATUS_COLUMN = 12; // Column L
+const TARGET_ROW_FOR_INSERTION = 2;
+const ROW_TO_INSERT_ABOVE = 2;
+const NEW_ROW_DEFAULT_STATUS = "Not called";
+
+
+/**
+ * Runs when the spreadsheet is opened by a user with edit access.
+ * Sets default cell clipping for all cells and adds a custom menu item.
+ */
+function onOpen() {
+  // Set all existing cells to clip text on open
+  setDefaultCellClippingToAllSheets_();
+
+  // Add a custom menu for manual re-application
+  SpreadsheetApp.getUi()
+    .createMenu('Formatting')
+    .addItem('Apply Clip to All Cells', 'setDefaultCellClippingToAllSheets_')
+    .addToUi();
+}
+
+
+/**
+ * Main function that runs automatically whenever a user edits any cell.
+ * @param {Object} e The event object provided by Google Sheets.
+ */
+function onEdit(e) {
+  // Exit if the event object is not available
+  if (!e || !e.range) {
+    console.error("onEdit event object or range is undefined. Exiting.");
+    return;
+  }
+  
+  const range = e.range;
+  const sheet = range.getSheet();
+  const sheetName = sheet.getName();
+
+  // --- Step 1: Check if the edited sheet is one we should act on ---
+  // If the list is empty, it will apply to all sheets. Otherwise, it checks the name.
+  if (AFFECTED_SHEETS.length > 0 && AFFECTED_SHEETS.indexOf(sheetName) === -1) {
+    return; // Exit if the sheet name is not in our list
+  }
+  
+  // --- Step 2: Apply Cell Clipping to every edit on the affected sheets ---
+  try {
+    range.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+  } catch (clipError) {
+    console.error(`Failed to apply clipping: ${clipError.message}`);
+  }
+
+  // --- Step 3: Handle Row Insertion and Coloring Logic ---
+  const editedRow = range.getRow();
+  const editedCol = range.getColumn();
+  const firstEditedRow = editedRow; // For clarity in later logic
+  const selectedValue = e.value;
+
+  // Check if the edit was in the specific cell that triggers BOTH actions (L2)
+  if (editedRow === TARGET_ROW_FOR_INSERTION && editedCol === STATUS_COLUMN) {
+    // Per your instruction: insert the row first, then color the row that was pushed down.
+    
+    // 1. Insert the new row
+    insertNewRow_(sheet);
+
+    // 2. Color the row that was just pushed down (now row 3)
+    // We need to re-fetch the range for the row that moved.
+    const rowToColor = sheet.getRange(TARGET_ROW_FOR_INSERTION + 1, 1, 1, sheet.getMaxColumns());
+    applyRowFormatting_(rowToColor, selectedValue);
+    
+    return; // Exit here since we've handled this specific case
+  }
+  
+  // Check if the edit was ONLY for coloring a row (any row in column L, except row 2 which was handled above)
+  if (editedCol === STATUS_COLUMN && editedRow !== TARGET_ROW_FOR_INSERTION) {
+    const rowToColor = sheet.getRange(editedRow, 1, 1, sheet.getMaxColumns());
+    applyRowFormatting_(rowToColor, selectedValue);
+    return; // Action is complete
+  }
+  
+  // Check if the edit was ONLY for inserting a row (anywhere in row 2, except column L which was handled above)
+  const lastEditedRow = range.getLastRow();
+  if (firstEditedRow <= TARGET_ROW_FOR_INSERTION && lastEditedRow >= TARGET_ROW_FOR_INSERTION) {
+    // Check if the edited range in row 2 contains any data
+    if (range.getValues().flat().some(cell => cell.toString().trim() !== "")) {
+      insertNewRow_(sheet);
+    }
+  }
+}
+
+/**
+ * Inserts a new row and sets its default status value.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to act on.
+ */
+function insertNewRow_(sheet) {
+  try {
+    sheet.insertRowBefore(ROW_TO_INSERT_ABOVE);
+    // Set the default status in the new row 2
+    sheet.getRange(ROW_TO_INSERT_ABOVE, STATUS_COLUMN).setValue(NEW_ROW_DEFAULT_STATUS);
+  } catch (e) {
+    console.error(`Error inserting row: ${e.message}`);
+  }
+}
+
+/**
+ * Applies background and font colors to a given row based on a status value.
+ * @param {GoogleAppsScript.Spreadsheet.Range} targetRow The entire row range to format.
+ * @param {string} status The value from the status dropdown.
+ */
+function applyRowFormatting_(targetRow, status) {
+  let backgroundColor;
+  let fontColor;
+
+  switch (status) {
+    case "Not called":
+      backgroundColor = "#c00000"; // Darker Red from image
+      fontColor = "#ffffff";       // White text for contrast
+      break;
+    case "SPP called":
+      backgroundColor = "#ffc0cb"; // Light Pink
+      fontColor = "#000000";       // Black
+      break;
+    case "SPP WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#ff00ff";       // Hot Pink (Magenta)
+      break;
+    case "PPL Called":
+      backgroundColor = "#add8e6"; // Light Blue
+      fontColor = "#000000";       // Black
+      break;
+    case "PPL WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#00008b";       // Dark Blue
+      break;
+    case "Nas called":
+      backgroundColor = "#e6e6fa"; // Light Purple (Lavender)
+      fontColor = "#000000";       // Black
+      break;
+    case "Nas WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#800080";       // Dark Purple
+      break;
+    default: // Reset to default if cell is cleared or value doesn't match
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#000000";       // Black
+      break;
+  }
+  
+  try {
+    targetRow.setBackground(backgroundColor).setFontColor(fontColor);
+  } catch (e) {
+    console.error(`Error applying formatting: ${e.message}`);
+  }
+}
+
+/**
+ * Helper function to apply clipping to all cells in all sheets.
+ * Called on open and can be triggered manually from the menu.
+ */
+function setDefaultCellClippingToAllSheets_() {
+  const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  sheets.forEach(sheet => {
+    try {
+      const dataRange = sheet.getDataRange();
+      if (dataRange.getWidth() > 0 && dataRange.getHeight() > 0) {
+        dataRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+      }
+    } catch (error) {
+      console.error(`Error setting default clipping for sheet ${sheet.getName()}: ${error.message}`);
+    }
+  });
+}
