@@ -1,0 +1,77 @@
+/**
+ * @OnlyCurrentDoc
+ * This script automatically changes the background and text color of a row
+ * based on the value selected in column L (the 12th column).
+ * It is designed to work on any sheet within the spreadsheet.
+ * * To install:
+ * 1. Open your Google Sheet.
+ * 2. Go to Extensions > Apps Script.
+ * 3. Copy all the code from this file.
+ * 4. Paste the code into the script editor, replacing any existing code.
+ * 5. Click the "Save project" icon (looks like a floppy disk).
+ * 6. The script will now run automatically whenever you edit column L.
+ */
+
+function onEdit(e) {
+  // Get the event object properties
+  const range = e.range;
+  const sheet = range.getSheet();
+  const editedRow = range.getRow();
+  const editedCol = range.getColumn();
+  const selectedValue = e.value;
+
+  // Define the column to watch for changes (L is the 12th column)
+  const statusColumn = 12;
+
+  // Exit if the edit was not in the designated status column
+  if (editedCol !== statusColumn) {
+    return;
+  }
+
+  // Define the colors based on the dropdown value
+  let backgroundColor;
+  let fontColor;
+
+  switch (selectedValue) {
+    case "Not called":
+      backgroundColor = "#ff9999"; // A slightly softer red
+      fontColor = "#000000";       // Black
+      break;
+    case "SPP called":
+      backgroundColor = "#ffc0cb"; // Light Pink
+      fontColor = "#000000";       // Black
+      break;
+    case "SPP WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#ff00ff";       // Hot Pink (Magenta)
+      break;
+    case "PPL Called":
+      backgroundColor = "#add8e6"; // Light Blue
+      fontColor = "#000000";       // Black
+      break;
+    case "PPL WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#00008b";       // Dark Blue
+      break;
+    case "Nas called":
+      backgroundColor = "#e6e6fa"; // Light Purple (Lavender)
+      fontColor = "#000000";       // Black
+      break;
+    case "Nas WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#800080";       // Dark Purple
+      break;
+    default:
+      // If the selection is cleared or doesn't match, reset to default colors
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#000000";       // Black
+      break;
+  }
+
+  // Get the entire row that was edited
+  const targetRow = sheet.getRange(editedRow, 1, 1, sheet.getMaxColumns());
+
+  // Apply the new background and font colors to the entire row
+  targetRow.setBackground(backgroundColor);
+  targetRow.setFontColor(fontColor);
+}
