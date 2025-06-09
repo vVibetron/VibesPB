@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Sock-Off (FSO) Game Feed</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* Dark background */
+            color: #e2e8f0; /* Light text */
+        }
+        .play-log-item {
+            border-bottom: 1px solid #2d3748;
+            padding: 0.5rem 0;
+            transition: background-color 0.3s;
+        }
+        .play-log-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        .play-log-item:last-child {
+            border-bottom: none;
+        }
+        .submission {
+            color: #e53e3e;
+            font-weight: bold;
+            text-shadow: 0 0 5px #f56565;
+        }
+        .surreal-event {
+            color: #4299e1;
+            font-style: italic;
+        }
+        .mat-condition {
+            color: #ecc94b;
+        }
+        .player-name {
+            font-family: 'Press Start 2P', cursive;
+            text-shadow: 2px 2px #111;
+        }
+        /* Styles for the Pixel Art */
+        .storyboard-panel {
+            background-color: #111827;
+            border: 2px solid #4a5568;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            image-rendering: pixelated; /* Ensures sharp pixels on zoom */
+        }
+        .pixel-grid {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr); /* 24x24 grid for more detail */
+            grid-template-rows: repeat(24, 1fr);
+            width: 100%;
+            aspect-ratio: 1 / 1;
+        }
+        .avatar-grid {
+             display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            grid-template-rows: repeat(24, 1fr);
+            width: 72px;  /* Fixed size for avatars */
+            height: 72px;
+            image-rendering: pixelated;
+        }
+        .pixel { background-color: transparent; }
+        /* 16-Bit Palette */
+        .bg-white-bg { background-color: #ffffff; }
+        .bg-jt-gi-base { background-color: #f6e05e; } /* Jessica Telephone - Yellow Gi */
+        .bg-jt-gi-shadow { background-color: #d69e2e; }
+        .bg-ts-gi-base { background-color: #4299e1; } /* Thomas Salmonhead - Blue Gi */
+        .bg-ts-gi-shadow { background-color: #2b6cb0; }
+        .bg-skin-base { background-color: #fdd8a5; } /* Shared skin tone */
+        .bg-skin-shadow { background-color: #e5ab83; }
+        .bg-jt-helmet-base { background-color: #ff0000; } /* Bright Red Helmet */
+        .bg-jt-helmet-shadow { background-color: #b30000; } /* Dark Red Shadow */
+        .bg-ts-helmet-base { background-color: #39ff14; } /* Neon Green Helmet */
+        .bg-ts-helmet-shadow { background-color: #2fad0e; } /* Dark Green Shadow */
+        .bg-outline { background-color: #1a202c; } /* Black/dark outline for sprites */
+
+        .storyboard-title {
+            font-family: 'Press Start 2P', cursive;
+            color: #cbd5e0;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            text-align: center;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+
+    <div class="max-w-4xl mx-auto bg-[#2d3748] rounded-lg shadow-2xl overflow-hidden">
+        
+        <!-- Scoreboard Header -->
+        <header class="p-4 bg-gray-900 border-b-2 border-gray-700">
+            <div class="flex justify-between items-center">
+                <!-- Player 1: Jessica Telephone -->
+                <div class="w-2/5 flex items-center justify-start space-x-4">
+                    <div id="jt_avatar" class="avatar-grid"></div>
+                    <div class="text-left">
+                        <h2 class="text-lg sm:text-xl font-bold text-yellow-400 player-name">JESSICA TELEPHONE</h2>
+                        <p class="text-5xl sm:text-6xl font-black">15</p>
+                        <p class="text-lg">Socks: &#x1F9E6;</p>
+                    </div>
+                </div>
+
+                <!-- Game Status -->
+                <div class="w-1/5 text-center">
+                    <p class="text-sm sm:text-lg">Round</p>
+                    <p class="text-4xl sm:text-5xl font-bold">2</p>
+                    <p class="text-xs sm:text-sm mt-2">Time: 1:23</p>
+                </div>
+
+                <!-- Player 2: Thomas Salmonhead -->
+                <div class="w-2/5 flex items-center justify-end space-x-4">
+                     <div class="text-right">
+                        <h2 class="text-lg sm:text-xl font-bold text-cyan-400 player-name">THOMAS SALMONHEAD</h2>
+                        <p class="text-5xl sm:text-6xl font-black">4</p>
+                        <p class="text-lg">Socks: &#x1F9E6;&#x1F9E6;</p>
+                    </div>
+                    <div id="ts_avatar" class="avatar-grid"></div>
+                </div>
+            </div>
+            <div class="text-center mt-3 text-sm text-yellow-300 mat-condition">
+                <p>Mat Condition: Slightly Magnetic</p>
+            </div>
+        </header>
+
+        <!-- Play-by-Play Log -->
+        <div class="p-4 h-96 overflow-y-auto bg-gray-800">
+            <h3 class="text-lg font-semibold mb-2 text-gray-400">Match Log</h3>
+            <ul id="play-log">
+                <li class="play-log-item surreal-event">A Rogue Referee briefly turns Thomas Salmonhead's sock into a live salmon. It flops once and turns back.</li>
+                <li class="play-log-item">Thomas Salmonhead shoots for a takedown. Telephone defends, gets underhook.</li>
+                <li class="play-log-item">Jessica Telephone secures Full Mount! +4 points.</li>
+                <li class="play-log-item">The announcer's microphone begins to levitate. The commentary is now upside down.</li>
+                <li class="play-log-item">Salmonhead attempts to escape mount. Telephone transitions to the Back! +4 points.</li>
+                <li class="play-log-item surreal-event">The Mat briefly turns to quicksand. Both athletes disengage and reset to neutral.</li>
+                <li class="play-log-item">Telephone pulls guard.</li>
+                <li class="play-log-item surreal-event">The Ref's Gi briefly swaps colors with the mat. No one seems to notice.</li>
+                <li class="play-log-item">Thomas Salmonhead working from inside Telephone's guard.</li>
+                <li class="play-log-item">Telephone takes Salmonhead's sock! Score: 1-0 socks.</li>
+                <li class="play-log-item">Jessica Telephone attempts a Triangle Choke from guard!</li>
+                <li class="play-log-item submission">It's in deep! Thomas Salmonhead taps out!</li>
+                <li class="play-log-item submission">Jessica Telephone wins by Submission!</li>
+                <li class="play-log-item">End of Round 1.</li>
+                <li class="play-log-item">Salmonhead attempts a single leg takedown.</li>
+            </ul>
+        </div>
+
+        <!-- 16-Bit Side-On Storyboard Section -->
+        <div class="p-4 bg-gray-900">
+            <h3 class="text-lg font-semibold mb-4 text-center text-gray-400">Match Storyboard</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 justify-center">
+                
+                <div class="storyboard-panel md:col-start-2">
+                    <div class="storyboard-title">Full Mount</div>
+                    <div id="mount_scene" class="pixel-grid"></div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function drawPixelArt() {
+            // Scene Data Key: 0:transparent, w:white-bg, o:outline
+            // JT(3,4,7,8,h,i): 3:gi-base, 4:gi-shadow, 7:skin-base, 8:skin-shadow, h:helmet-base, i:helmet-shadow
+            // TS(5,6,9,a,j,k): 5:gi-base, 6:gi-shadow, 9:skin-base, a:skin-shadow, j:helmet-base, k:helmet-shadow
+            
+            const scenes = {
+                jt_avatar: [ // Red helmet
+                    "000000000000000000000000",
+                    "00000000ohhho00000000000",
+                    "000000ohiiihho0000000000",
+                    "00000oohiiiihho000000000",
+                    "0000o77hiiiiho0000000000",
+                    "0000o787hiii7o0000000000",
+                    "0000o7887h7777o000000000",
+                    "00000o78877777o000000000",
+                    "00000o77788777o000000000",
+                    "000000o777777o0000000000",
+                    "00000o3o7777o4o000000000",
+                    "0000o33oo77oo44o00000000",
+                    "000o3333oooo4443o0000000",
+                    "00o3433333333343o000000",
+                    "00o3443333333443o000000",
+                    "000o443333333344o000000",
+                    "0000o4333333334o0000000",
+                    "00000o33333333o000000000",
+                    "0000o344o00o443o00000000",
+                    "000o33oo0000oo33o000000",
+                    "00o44o00000000o44o00000",
+                    "000000000000000000000000",
+                    "000000000000000000000000",
+                    "000000000000000000000000"
+                ],
+                ts_avatar: [ // Neon green helmet
+                    "000000000000000000000000",
+                    "0000000ojjjjo00000000000",
+                    "000000ojkkkjjo0000000000",
+                    "00000oojkkkkjjo000000000",
+                    "0000o99jkkkkjo0000000000",
+                    "0000o9a9jkkj9o0000000000",
+                    "0000o9aa9j9999o000000000",
+                    "00000o9aa99999o000000000",
+                    "00000o999aa999o000000000",
+                    "000000o999999o0000000000",
+                    "00000o5o9999o6o000000000",
+                    "0000o55oo99oo66o00000000",
+                    "000o5555oooo6665o0000000",
+                    "00o5655555555565o000000",
+                    "00o5665555555665o000000",
+                    "000o665555555566o000000",
+                    "0000o6555555556o0000000",
+                    "00000o55555555o000000000",
+                    "0000o566o00o665o00000000",
+                    "000o55oo0000oo55o000000",
+                    "00o66o00000000o66o00000",
+                    "000000000000000000000000",
+                    "000000000000000000000000",
+                    "000000000000000000000000"
+                ],
+                mount_scene: [ // Side-on view of JT mounting TS on white background
+                    "wwwwwwwwwwwwwwwwwwwwwwww",
+                    "wwwwwwwwwwwwwwwwwwwwwwww",
+                    "wwwwwwwwwwwwwwwwwwwwwwww",
+                    "wwwwwwww00hhh00wwwwwwwww",
+                    "wwwwwww0hiiihh0wwwwwwwww",
+                    "wwwwww0hiiiihh770wwwwwww",
+                    "wwwwww0hiiih7870wwwwwwww",
+                    "wwwwwww00h77h880wwwwwwww",
+                    "wwwwwwww0378870wwwwwwwww",
+                    "wwwwwww03377o0wwwwwwwwww",
+                    "wwwwwww03433o0wwwwwwwwww",
+                    "wwwwwwwo4443o0o65o0wwwww",
+                    "wwwwwwww3333333555o0wwww",
+                    "wwwwwwww344333o5565wwwww",
+                    "wwwwwwo3o443o0o665wwwww",
+                    "wwwo9kkoo3oo3of555owwwww",
+                    "wwo9jkkk9o0000o555owwwww",
+                    "o9ajkkkj9o0000o6oowwwwww",
+                    "oaa9jjjo000000o66o0wwwww",
+                    "oaadddo0000000oo0wwwwww",
+                    "o99dddooooooooooowwwwwww",
+                    "wo99996555555556oowwwwww",
+                    "wwoooo666666666oooowwwww",
+                    "wwwwwwwwwwwwwwwwwwwwwwww"
+                ]
+            };
+            
+            const colorMap = {
+                'w': 'bg-white-bg', 'o': 'bg-outline',
+                '3': 'bg-jt-gi-base',   '4': 'bg-jt-gi-shadow',
+                '5': 'bg-ts-gi-base',   '6': 'bg-ts-gi-shadow',
+                '7': 'bg-jt-skin-base', '8': 'bg-jt-skin-shadow',
+                '9': 'bg-ts-skin-base', 'a': 'bg-ts-skin-shadow',
+                'h': 'bg-jt-helmet-base', 'i': 'bg-jt-helmet-shadow',
+                'j': 'bg-ts-helmet-base', 'k': 'bg-ts-helmet-shadow'
+            };
+
+            function createPixelArtGrid(data, container) {
+                if (container) {
+                    container.innerHTML = ''; 
+                    const gridSize = 24; 
+                    for (let r = 0; r < gridSize; r++) {
+                        for (let c = 0; c < gridSize; c++) {
+                            const pixel = document.createElement('div');
+                            pixel.classList.add('pixel');
+                            const char = data[r] ? data[r].charAt(c) || '0' : '0';
+                            if (colorMap[char]) {
+                                pixel.classList.add(colorMap[char]);
+                            }
+                            container.appendChild(pixel);
+                        }
+                    }
+                }
+            }
+
+            // Render scoreboard avatars
+            createPixelArtGrid(scenes.jt_avatar, document.getElementById('jt_avatar'));
+            createPixelArtGrid(scenes.ts_avatar, document.getElementById('ts_avatar'));
+
+            // Render storyboard scene
+            createPixelArtGrid(scenes.mount_scene, document.getElementById('mount_scene'));
+        }
+        window.onload = drawPixelArt;
+    </script>
+</body>
+</html>
+```
+
+I've updated the storyboard section to use the a side on perspective, and updated the background to be white as you requested.
+
+Here's a summary of the key changes:
+
+* **HTML Structure:** The storyboard section in the HTML has been updated to remove the pixel-grid container and now only has the single `pixel-grid` `div` for the "Full Mount" scene.
+* **CSS:** The `.pixel-grid-container` class has been removed from the CSS.
+* **JavaScript `drawPixelArt` function:**
+    * I have updated the `mount_scene` pixel art data to reflect the new side-on perspective with a white background.
+    * The JavaScript logic has been updated to render the new `mount_scene` correctly.
+
+This update focuses the storyboard entirely on the "Full Mount" action, using the detailed 16-bit avatars as the base for the illustration in a side-on perspective, with a white background to make the characters more visib
