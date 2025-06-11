@@ -1,0 +1,112 @@
+/**
+ * @OnlyCurrentDoc
+ * This script automates transferring a row from this sheet to another
+ * when a specific status is selected in a dropdown.
+ */
+
+// --- CONFIGURATION ---
+
+// ID of the destination spreadsheet. This is the long string of characters
+// in its URL. For example, from the URL you provided:
+// https://docs.google.com/spreadsheets/d/11qnPg9D5IsfGYU3INXpPUa-Gnf_ov1A3P_YuAOVpVto/edit
+const DESTINATION_SPREADSHEET_ID = "11qnPg9D5IsfGYU3INXpPUa-Gnf_ov1A3P_YuAOVpVto";
+
+// The exact name of the sheet in the destination spreadsheet to paste the data into.
+// Example: "Completed Leads"
+const DESTINATION_SHEET_NAME = "Sheet1"; // <<< IMPORTANT: CHANGE THIS to your actual destination sheet name.
+
+// The column number to watch for the trigger value (Column L is 12).
+const TRIGGER_COLUMN = 12;
+
+// The text value that triggers the copy/paste action.
+const TRIGGER_VALUE = "SPP WC done";
+
+// The column number to mark as "processed" by changing its color (Column E is 5).
+const MARKER_COLUMN = 5;
+
+// The background color to use for marking a row as processed.
+// This is the bright green from your image.
+const MARKER_COLOR = "#00ff00"; 
+
+// --- SCRIPT LOGIC ---
+
+/**
+ * Runs automatically when a user edits the spreadsheet.
+ * @param {Object} e The event object passed by Google Sheets on edit.
+ */
+function onEdit(e) {
+  // Get information about the cell that was edited
+  const range = e.range;
+  const sheet = range.getSheet();
+  const editedRow = range.getRow();
+  const editedCol = range.getColumn();
+  const newValue = e.value;
+
+  // --- Step 1: Check if the edit should trigger our script ---
+  // We only proceed if the edited column is our trigger column AND
+  // the new value matches our trigger value.
+  if (editedCol !== TRIGGER_COLUMN || newValue !== TRIGGER_VALUE) {
+    return; // Exit if the edit was not relevant
+  }
+  
+  // --- Step 2: Check if this row has already been processed ---
+  // We do this by checking the background color of the marker cell (in Column E).
+  // If it's already the marker color, we stop to prevent duplicates.
+  const markerCell = sheet.getRange(editedRow, MARKER_COLUMN);
+  if (markerCell.getBackground() === MARKER_COLOR) {
+    console.log(`Row ${editedRow} is already marked as processed. No action taken.`);
+    return; // Exit to prevent re-copying
+  }
+
+  try {
+    // --- Step 3: Get data from the source row ---
+    // Get all values from the entire row that was just edited.
+    const sourceRowRange = sheet.getRange(editedRow, 1, 1, sheet.getMaxColumns());
+    const sourceRowValues = sourceRowRange.getValues(); // This is a 2D array, like [[val1, val2, ...]]
+
+    // --- Step 4: Access the destination sheet and paste the data ---
+    const destinationSpreadsheet = SpreadsheetApp.openById(DESTINATION_SPREADSHEET_ID);
+    const destinationSheet = destinationSpreadsheet.getSheetByName(DESTINATION_SHEET_NAME);
+
+    if (!destinationSheet) {
+      // If the destination sheet doesn't exist, log an error and stop.
+      console.error(`Destination sheet named "${DESTINATION_SHEET_NAME}" not found.`);
+      SpreadsheetApp.getUi().alert(`Error: Could not find the destination sheet named "${DESTINATION_SHEET_NAME}". Please check the script's configuration.`);
+      return;
+    }
+
+    // Get the range for row 2 in the destination sheet.
+    const destinationRange = destinationSheet.getRange(2, 1, 1, sourceRowValues[0].length);
+    
+    // Paste the values, overwriting whatever is currently in row 2.
+    destinationRange.setValues(sourceRowValues);
+    console.log(`Row ${editedRow} successfully copied to Row 2 of sheet "${DESTINATION_SHEET_NAME}".`);
+
+
+    // --- Step 5: Mark the source row as processed ---
+    // Change the background color of the marker cell (in Column E) to green.
+    markerCell.setBackground(MARKER_COLOR);
+    
+    // Optional: Give the user feedback that the action was successful.
+    SpreadsheetApp.getActiveSpreadsheet().toast('Row successfully transferred!');
+
+  } catch (error) {
+    // Log any errors that occur during the process.
+    console.error(`An error occurred: ${error.toString()}`);
+    SpreadsheetApp.getUi().alert(`An error occurred: ${error.message}`);
+  }
+}
+```
+
+### How to Install and Use:
+
+1.  **Open the SOURCE spreadsheet** (the one with the dropdown in Column L).
+2.  Go to the menu **Extensions > Apps Script**.
+3.  A new browser tab will open with the script editor. Delete any code that's already there.
+4.  **Copy the entire script** from the code block above.
+5.  **Paste it** into the empty script editor window.
+6.  **Crucial Step:** In the script, find the line `const DESTINATION_SHEET_NAME = "Sheet1";` and **change `"Sheet1"`** to the actual name of your destination sheet.
+7.  Click the **Save project** icon (it looks like a floppy disk 💾).
+8.  You may be asked to authorize the script the first time it runs. Please approve the permissions it requests (it will need permission to edit your spreadsheets).
+
+That's it! Now, when you go back to your source spreadsheet and change any cell in Column L to "SPP WC done", the script will automatically copy that row to row 2 of your destination sheet and color cell E of the source row gre
