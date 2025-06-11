@@ -1,0 +1,232 @@
+/**
+ * This script combines multiple automations for specified sheets:
+ * 1. Sets all cells to 'Clip' text wrapping on open and on edit.
+ * 2. Formats entire rows with specific background and font colors based on a value in Column L.
+ * 3. Inserts a new row above row 2 when any data is entered into row 2.
+ * 4. Copies a row to a destination spreadsheet when the status in Column L is set to "SPP WC done".
+ */
+
+// --- USER CONFIGURATION ---
+
+// Add the exact names of the sheets you want ALL of these automations to work on.
+// Example: const AFFECTED_SHEETS = ["Leads", "Follow-up"];
+const AFFECTED_SHEETS = ["Sheet1"]; // <--- IMPORTANT: CHANGE "Sheet1" TO YOUR SHEET NAME(S)
+
+// ID of the destination spreadsheet for completed rows. This is the long string of
+// characters in the spreadsheet's URL.
+const DESTINATION_SPREADSHEET_ID = "11qnPg9D5IsfGYU3INXpPUa-Gnf_ov1A3P_YuAOVpVto";
+
+// The exact name of the sheet in the destination spreadsheet to paste the data into.
+const DESTINATION_SHEET_NAME = "Sheet1"; // <<< IMPORTANT: CHANGE THIS to your actual destination sheet name.
+
+
+// --- SCRIPT CONSTANTS (Usually no need to change these) ---
+const STATUS_COLUMN = 12; // Column L
+const ROW_INSERTION_TARGET_ROW = 2;
+const ROW_INSERTION_NEW_ROW_POSITION = 2;
+const NEW_ROW_DEFAULT_STATUS = "Not called";
+
+const ROW_TRANSFER_TRIGGER_VALUE = "SPP WC done";
+const ROW_TRANSFER_MARKER_COLUMN = 5; // Column E
+const ROW_TRANSFER_MARKER_COLOR = "#00ff00"; // Bright Green
+
+
+/**
+ * Runs when the spreadsheet is opened. Adds a custom menu.
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Formatting')
+    .addItem('Apply Clip to All Cells', 'setDefaultCellClippingToAllSheets_')
+    .addToUi();
+}
+
+/**
+ * Main function that runs automatically whenever a user edits a cell.
+ * @param {Object} e The event object provided by Google Sheets.
+ */
+function onEdit(e) {
+  if (!e || !e.range) { return; }
+  
+  const range = e.range;
+  const sheet = range.getSheet();
+  const sheetName = sheet.getName();
+
+  // --- Step 1: Check if the edited sheet is one we should act on ---
+  if (AFFECTED_SHEETS.length > 0 && AFFECTED_SHEETS.indexOf(sheetName) === -1) {
+    return; // Exit if the sheet name is not in our list
+  }
+  
+  // --- Step 2: Apply Cell Clipping to every edit on the affected sheets ---
+  range.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+
+  // --- Step 3: Handle All Other Logic ---
+  const editedRow = range.getRow();
+  const editedCol = range.getColumn();
+  const newValue = e.value;
+
+  // --- Logic Branch 1: Row Transfer Trigger ---
+  // This is the highest priority action for a status change.
+  if (editedCol === STATUS_COLUMN && newValue === ROW_TRANSFER_TRIGGER_VALUE) {
+    transferRowToDestination_(sheet, editedRow);
+    return; // Stop here, as the row is now considered processed.
+  }
+  
+  // --- Logic Branch 2: Combined Row Insert & Color on Row 2 ---
+  // This runs if the status in row 2 is changed to ANYTHING OTHER than the transfer value.
+  if (editedRow === ROW_INSERTION_TARGET_ROW && editedCol === STATUS_COLUMN) {
+    // Insert new row first
+    insertNewRow_(sheet);
+    // Then color the row that was just pushed down to row 3
+    const rowToColor = sheet.getRange(ROW_INSERTION_TARGET_ROW + 1, 1, 1, sheet.getMaxColumns());
+    applyRowFormatting_(rowToColor, newValue);
+    return; // Action complete
+  }
+  
+  // --- Logic Branch 3: Standard Row Coloring ---
+  // This runs for any other row when the status column is changed.
+  if (editedCol === STATUS_COLUMN) {
+    const rowToColor = sheet.getRange(editedRow, 1, 1, sheet.getMaxColumns());
+    applyRowFormatting_(rowToColor, newValue);
+    return; // Action complete
+  }
+  
+  // --- Logic Branch 4: Standard Row Insertion ---
+  // This runs if ANY cell in row 2 is edited (except the status column, which was handled above).
+  const lastEditedRow = range.getLastRow();
+  const firstEditedRow = range.getRow(); // Define firstEditedRow here
+  if (firstEditedRow <= ROW_INSERTION_TARGET_ROW && lastEditedRow >= ROW_INSERTION_TARGET_ROW) {
+    // Check if the edited range in row 2 now contains any data.
+    if (range.getValues().flat().some(cell => cell.toString().trim() !== "")) {
+      insertNewRow_(sheet);
+    }
+  }
+}
+
+/**
+ * Copies the specified row to the destination sheet and marks it as processed.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object where the edit occurred.
+ * @param {number} rowNum The row number that triggered the transfer.
+ */
+function transferRowToDestination_(sheet, rowNum) {
+  const markerCell = sheet.getRange(rowNum, ROW_TRANSFER_MARKER_COLUMN);
+  
+  // Prevent re-copying if already marked
+  if (markerCell.getBackground() === ROW_TRANSFER_MARKER_COLOR) {
+    console.log(`Row ${rowNum} already transferred. No action taken.`);
+    return;
+  }
+
+  try {
+    // Get all values from the entire source row.
+    const sourceRowRange = sheet.getRange(rowNum, 1, 1, sheet.getMaxColumns());
+    const sourceRowValues = sourceRowRange.getValues();
+
+    // Access the destination sheet
+    const destinationSpreadsheet = SpreadsheetApp.openById(DESTINATION_SPREADSHEET_ID);
+    const destinationSheet = destinationSpreadsheet.getSheetByName(DESTINATION_SHEET_NAME);
+
+    if (!destinationSheet) {
+      const msg = `Error: Destination sheet "${DESTINATION_SHEET_NAME}" not found.`;
+      console.error(msg);
+      SpreadsheetApp.getUi().alert(msg);
+      return;
+    }
+
+    // Get the range for row 2 and paste the values, overwriting current content.
+    const destinationRange = destinationSheet.getRange(2, 1, 1, sourceRowValues[0].length);
+    destinationRange.setValues(sourceRowValues);
+    
+    // Mark the source row as processed by coloring the cell in Column E.
+    markerCell.setBackground(ROW_TRANSFER_MARKER_COLOR);
+    
+    SpreadsheetApp.getActiveSpreadsheet().toast('Row transferred successfully!');
+  } catch (error) {
+    console.error(`An error occurred during row transfer: ${error.toString()}`);
+    SpreadsheetApp.getUi().alert(`An error occurred: ${error.message}`);
+  }
+}
+
+
+/**
+ * Inserts a new row above the target row and sets its default status value.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object to act on.
+ */
+function insertNewRow_(sheet) {
+  try {
+    sheet.insertRowBefore(ROW_TO_INSERT_ABOVE);
+    // Set the default status in the new row 2
+    sheet.getRange(ROW_TO_INSERT_ABOVE, STATUS_COLUMN).setValue(NEW_ROW_DEFAULT_STATUS);
+  } catch (e) {
+    console.error(`Error inserting row: ${e.message}`);
+  }
+}
+
+/**
+ * Applies background and font colors to a given row based on a status value.
+ * @param {GoogleAppsScript.Spreadsheet.Range} targetRow The entire row range to format.
+ * @param {string} status The value from the status dropdown.
+ */
+function applyRowFormatting_(targetRow, status) {
+  let backgroundColor;
+  let fontColor;
+
+  switch (status) {
+    case "Not called":
+      backgroundColor = "#c00000"; // Dark Red
+      fontColor = "#ffffff";       // White
+      break;
+    case "SPP called":
+      backgroundColor = "#ffc0cb"; // Light Pink
+      fontColor = "#000000";       // Black
+      break;
+    case "SPP WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#ff00ff";       // Hot Pink (Magenta)
+      break;
+    case "PPL Called":
+      backgroundColor = "#add8e6"; // Light Blue
+      fontColor = "#000000";       // Black
+      break;
+    case "PPL WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#00008b";       // Dark Blue
+      break;
+    case "Nas called":
+      backgroundColor = "#e6e6fa"; // Light Purple (Lavender)
+      fontColor = "#000000";       // Black
+      break;
+    case "Nas WC done":
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#800080";       // Dark Purple
+      break;
+    default: // Reset to default if cell is cleared or value doesn't match
+      backgroundColor = "#ffffff"; // White
+      fontColor = "#000000";       // Black
+      break;
+  }
+  
+  try {
+    targetRow.setBackground(backgroundColor).setFontColor(fontColor);
+  } catch (e) {
+    console.error(`Error applying formatting: ${e.message}`);
+  }
+}
+
+/**
+ * Helper function to apply clipping to all cells in all sheets.
+ * Called on open and can be triggered manually from the menu.
+ */
+function setDefaultCellClippingToAllSheets_() {
+  const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  sheets.forEach(sheet => {
+    try {
+      const dataRange = sheet.getDataRange();
+      if (dataRange.getWidth() > 0 && dataRange.getHeight() > 0) {
+        dataRange.setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+      }
+    } catch (error) {
+      console.error(`Error setting default clipping for sheet ${sheet.getName()}: ${error.message}`);
+    }
+  });
+}
