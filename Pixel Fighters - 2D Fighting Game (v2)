@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Fighters</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Press Start 2P', cursive;
+        }
+        .game-container {
+            position: relative;
+            display: inline-block;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        #gameOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+        }
+        .ui-container {
+            width: 100%;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .health-bar-container {
+            width: 40%;
+            height: 30px;
+            background-color: #444;
+            border: 4px solid #222;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+        .health-bar {
+            height: 100%;
+            background: linear-gradient(to bottom, #7CFC00, #32CD32);
+            width: 100%;
+            transition: width 0.2s linear;
+        }
+        #player1-health-container {
+            border-right: 2px solid #222;
+        }
+        #player2-health-container {
+            border-left: 2px solid #222;
+            transform: scaleX(-1);
+        }
+        #timer {
+            width: 100px;
+            height: 60px;
+            background-color: #222;
+            color: white;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 4px solid #444;
+            border-radius: 5px;
+        }
+        #gameStatus {
+            color: white;
+            font-size: 48px;
+            text-align: center;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-shadow: 4px 4px #000;
+            display: none;
+        }
+        #logButton {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            font-family: 'Press Start 2P', cursive;
+            background-color: #333;
+            color: #ddd;
+            border: 2px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #logDisplay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: #00FF41; /* Matrix Green */
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            padding: 20px;
+            overflow-y: scroll;
+            white-space: pre-wrap;
+            display: none; /* Hidden by default */
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- UI Overlay -->
+        <div id="gameOverlay">
+            <div class="ui-container">
+                <div id="player1-health-container" class="health-bar-container">
+                    <div id="player1-health" class="health-bar"></div>
+                </div>
+                <div id="timer">&infin;</div>
+                <div id="player2-health-container" class="health-bar-container">
+                    <div id="player2-health" class="health-bar"></div>
+                </div>
+            </div>
+            <div id="gameStatus">FIGHT!</div>
+            <pre id="logDisplay"></pre>
+        </div>
+        <!-- Game Canvas -->
+        <canvas id="gameCanvas"></canvas>
+        <!-- Log Button -->
+        <button id="logButton" onclick="toggleLog()">Show Log</button>
+    </div>
+
+    <script>
+        // --- Game Setup ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 1024;
+        canvas.height = 576;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const gravity = 0.7;
+        const groundLevel = canvas.height - 96;
+        let gameLog = [];
+        let isPaused = false;
+        let animationId;
+
+        // --- Logging ---
+        function logEvent(action, details = {}) {
+            const timestamp = new Date().toLocaleTimeString();
+            gameLog.push({ timestamp, action, details });
+            if (gameLog.length > 100) { // Keep log from getting too big
+                gameLog.shift();
+            }
+        }
+
+        function toggleLog() {
+            isPaused = !isPaused;
+            const logDisplay = document.getElementById('logDisplay');
+            const logButton = document.getElementById('logButton');
+            if (isPaused) {
+                logEvent('Game Paused - Log Viewed');
+                logDisplay.textContent = JSON.stringify(gameLog, null, 2);
+                logDisplay.style.display = 'block';
+                logButton.textContent = 'Hide Log & Resume';
+                cancelAnimationFrame(animationId); // Stop the game loop
+            } else {
+                logEvent('Game Resumed');
+                logDisplay.style.display = 'none';
+                logButton.textContent = 'Show Log';
+                animate(); // Restart the game loop
+            }
+        }
+
+        // --- Player & Sprite Logic ---
+        class Sprite {
+            constructor({ position, velocity, color = 'red', offset = { x: 0, y: 0 }, facingDirection = 1 }) {
+                this.position = position;
+                this.velocity = velocity;
+                this.width = 50;
+                this.height = 150;
+                this.lastKey;
+                this.attackBox = {
+                    position: { x: this.position.x, y: this.position.y },
+                    offset,
+                    width: 120,
+                    height: 50
+                };
+                this.color = color;
+                this.isAttacking = false;
+                this.health = 100;
+                this.facingDirection = facingDirection; // 1 for right, -1 for left
+            }
+
+            draw() {
+                // Main Body
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.position.x, this.position.y, this.width, this.height);
+
+                // Head (simple circle on top)
+                ctx.beginPath();
+                ctx.arc(this.position.x + this.width / 2, this.position.y, this.width / 2, 0, Math.PI * 2);
+                ctx.fillStyle = '#f0e68c'; // Khaki color for skin
+                ctx.fill();
+
+                // Legs
+                ctx.fillStyle = '#444'; // Darker color for legs
+                ctx.fillRect(this.position.x, this.position.y + this.height, this.width / 2 - 2, 20);
+                ctx.fillRect(this.position.x + this.width / 2 + 2, this.position.y + this.height, this.width / 2 - 2, 20);
+
+                // Arms
+                if (this.isAttacking) {
+                    ctx.fillStyle = '#555';
+                    // Punching arm
+                    ctx.fillRect(this.position.x + (this.facingDirection === 1 ? this.width : -this.width/2), this.position.y + 40, this.width, 20);
+                    // Other arm
+                    ctx.fillRect(this.position.x, this.position.y + 70, this.width, 20);
+                } else {
+                    ctx.fillStyle = '#555';
+                    ctx.fillRect(this.position.x, this.position.y + 40, this.width, 20);
+                }
+            }
+
+            update() {
+                this.draw();
+                this.attackBox.position.x = this.position.x + (this.facingDirection === 1 ? this.attackBox.offset.x : -this.attackBox.offset.x - this.attackBox.width + this.width);
+                this.attackBox.position.y = this.position.y + this.attackBox.offset.y;
+
+                this.position.x += this.velocity.x;
+                this.position.y += this.velocity.y;
+
+                if (this.position.y + this.height + this.velocity.y >= groundLevel) {
+                    this.velocity.y = 0;
+                    this.position.y = groundLevel - this.height;
+                } else {
+                    this.velocity.y += gravity;
+                }
+            }
+            
+            attack() {
+                if(this.isAttacking) return;
+                this.isAttacking = true;
+                setTimeout(() => {
+                    this.isAttacking = false;
+                }, 200); // Attack duration
+            }
+        }
+
+        // --- Character Creation ---
+        const player = new Sprite({
+            position: { x: 200, y: 100 },
+            velocity: { x: 0, y: 0 },
+            color: 'white',
+            offset: { x: 0, y: 50 },
+            facingDirection: 1
+        });
+
+        const enemy = new Sprite({
+            position: { x: canvas.width - 250, y: 100 },
+            velocity: { x: 0, y: 0 },
+            color: 'red',
+            offset: { x: 0, y: 50 },
+            facingDirection: -1
+        });
+
+        // --- Keyboard Input ---
+        const keys = {
+            a: { pressed: false }, d: { pressed: false }, w: { pressed: false },
+            ArrowRight: { pressed: false }, ArrowLeft: { pressed: false }, ArrowUp: { pressed: false }
+        };
+
+        // --- Game Logic ---
+        function rectangularCollision({ rectangle1, rectangle2 }) {
+            return (
+                rectangle1.attackBox.position.x + rectangle1.attackBox.width >= rectangle2.position.x &&
+                rectangle1.attackBox.position.x <= rectangle2.position.x + rectangle2.width &&
+                rectangle1.attackBox.position.y + rectangle1.attackBox.height >= rectangle2.position.y &&
+                rectangle1.attackBox.position.y <= rectangle2.position.y + rectangle2.height
+            );
+        }
+
+        function determineWinner({ player, enemy }) {
+            isPaused = true;
+            document.querySelector('#gameStatus').style.display = 'flex';
+            let winner;
+            if (player.health === enemy.health) {
+                document.querySelector('#gameStatus').innerHTML = 'Tie';
+                winner = 'Tie';
+            } else if (player.health > enemy.health) {
+                document.querySelector('#gameStatus').innerHTML = 'Player 1 Wins';
+                winner = 'Player 1';
+            } else {
+                document.querySelector('#gameStatus').innerHTML = 'Player 2 Wins';
+                winner = 'Player 2';
+            }
+            logEvent('Game Over', { winner: winner, p1Health: player.health, p2Health: enemy.health });
+        }
+
+        // --- Animation Loop ---
+        function animate() {
+            animationId = window.requestAnimationFrame(animate);
+            if (isPaused) {
+                cancelAnimationFrame(animationId);
+                return;
+            }
+
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#4a5568';
+            ctx.fillRect(0, groundLevel, canvas.width, canvas.height - groundLevel);
+
+            player.update();
+            enemy.update();
+
+            player.velocity.x = 0;
+            enemy.velocity.x = 0;
+
+            // Player 1 movement
+            if (keys.a.pressed && player.lastKey === 'a') {
+                player.velocity.x = -5;
+                player.facingDirection = -1;
+            } else if (keys.d.pressed && player.lastKey === 'd') {
+                player.velocity.x = 5;
+                player.facingDirection = 1;
+            }
+
+            // Player 2 movement
+            if (keys.ArrowLeft.pressed && enemy.lastKey === 'ArrowLeft') {
+                enemy.velocity.x = -5;
+                enemy.facingDirection = -1;
+            } else if (keys.ArrowRight.pressed && enemy.lastKey === 'ArrowRight') {
+                enemy.velocity.x = 5;
+                enemy.facingDirection = 1;
+            }
+
+            // Collision detection & attack logic
+            if (rectangularCollision({ rectangle1: player, rectangle2: enemy }) && player.isAttacking) {
+                player.isAttacking = false;
+                enemy.health -= 10;
+                document.querySelector('#player2-health').style.width = Math.max(0, enemy.health) + '%';
+                logEvent('Attack Hit', { attacker: 'Player 1', target: 'Player 2', newHealth: enemy.health });
+            }
+
+            if (rectangularCollision({ rectangle1: enemy, rectangle2: player }) && enemy.isAttacking) {
+                enemy.isAttacking = false;
+                player.health -= 10;
+                document.querySelector('#player1-health').style.width = Math.max(0, player.health) + '%';
+                logEvent('Attack Hit', { attacker: 'Player 2', target: 'Player 1', newHealth: player.health });
+            }
+
+            // End game based on health
+            if (enemy.health <= 0 || player.health <= 0) {
+                determineWinner({ player, enemy });
+            }
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('keydown', (event) => {
+            if (isPaused) return; // Ignore input if paused
+            
+            logEvent('Key Down', { key: event.key });
+
+            switch (event.key) {
+                // Player 1
+                case 'd': keys.d.pressed = true; player.lastKey = 'd'; break;
+                case 'a': keys.a.pressed = true; player.lastKey = 'a'; break;
+                case 'w': if (player.position.y + player.height >= groundLevel) player.velocity.y = -20; break;
+                case ' ': player.attack(); break;
+
+                // Player 2
+                case 'ArrowRight': keys.ArrowRight.pressed = true; enemy.lastKey = 'ArrowRight'; break;
+                case 'ArrowLeft': keys.ArrowLeft.pressed = true; enemy.lastKey = 'ArrowLeft'; break;
+                case 'ArrowUp': if (enemy.position.y + enemy.height >= groundLevel) enemy.velocity.y = -20; break;
+                case 'ArrowDown': enemy.attack(); break;
+            }
+        });
+
+        window.addEventListener('keyup', (event) => {
+            switch (event.key) {
+                case 'd': keys.d.pressed = false; break;
+                case 'a': keys.a.pressed = false; break;
+                case 'ArrowRight': keys.ArrowRight.pressed = false; break;
+                case 'ArrowLeft': keys.ArrowLeft.pressed = false; break;
+            }
+        });
+
+        // --- Start Game ---
+        function initGame() {
+            logEvent('Game Start');
+            const gameStatusElem = document.querySelector('#gameStatus');
+            gameStatusElem.innerHTML = 'FIGHT!';
+            gameStatusElem.style.display = 'flex';
+            setTimeout(() => {
+                gameStatusElem.style.display = 'none';
+            }, 1500);
+            animate();
+        }
+
+        initGame();
+    </script>
+</body>
+</html>
