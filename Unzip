@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zip File Organizer</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip library to handle zip files in the browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the file input button */
+        .file-input-button {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
+        <!-- Header Section -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Zip File Organizer</h1>
+            <p class="text-gray-400 mt-2">Upload .zip archives, and I'll extract and organize the images for you.</p>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="bg-gray-700/50 p-6 rounded-xl space-y-4">
+            <!-- Step 1: Upload Files -->
+            <div>
+                <label class="text-lg font-semibold text-white">1. Upload Zip Folders</label>
+                <div class="mt-2">
+                    <input type="file" id="zip-files-input" multiple accept=".zip" class="hidden">
+                    <label for="zip-files-input" class="file-input-button w-full text-center px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-300 font-semibold">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                        Select Zip Files
+                    </label>
+                    <p id="file-selection-text" class="text-gray-400 text-sm mt-2 text-center">No files selected. You can upload multiple files.</p>
+                </div>
+            </div>
+
+            <!-- Step 2: Name Destination Folder -->
+            <div>
+                <label for="folder-name-input" class="text-lg font-semibold text-white">2. Name Your Destination Folder</label>
+                <div class="flex flex-col sm:flex-row gap-2 mt-2">
+                    <input type="text" id="folder-name-input" placeholder="e.g., 'Summer Vacation Photos'" class="flex-grow bg-gray-800 border border-gray-600 text-white rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+                    <button id="random-name-btn" class="px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors duration-300 font-semibold">
+                        Generate Random Name
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Process -->
+            <div>
+                <button id="unzip-btn" class="w-full px-4 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-300 font-bold text-lg disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    Unzip & Organize Images
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="hidden text-center py-4">
+            <svg class="animate-spin h-8 w-8 text-indigo-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p class="mt-2 text-lg font-semibold">Processing... Please wait.</p>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="results-container" class="bg-gray-900/70 p-4 rounded-xl min-h-[200px] max-h-[50vh] overflow-y-auto">
+            <p id="results-placeholder" class="text-gray-500 text-center py-10">Your extracted images will appear here.</p>
+        </div>
+
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const zipInput = document.getElementById('zip-files-input');
+        const folderNameInput = document.getElementById('folder-name-input');
+        const randomNameBtn = document.getElementById('random-name-btn');
+        const unzipBtn = document.getElementById('unzip-btn');
+        const resultsContainer = document.getElementById('results-container');
+        const resultsPlaceholder = document.getElementById('results-placeholder');
+        const fileSelectionText = document.getElementById('file-selection-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+
+        // --- Event Listeners ---
+
+        // Update file selection text when user chooses files
+        zipInput.addEventListener('change', () => {
+            if (zipInput.files.length > 0) {
+                fileSelectionText.textContent = `${zipInput.files.length} file(s) selected.`;
+                fileSelectionText.classList.add('text-green-400');
+            } else {
+                fileSelectionText.textContent = 'No files selected. You can upload multiple files.';
+                 fileSelectionText.classList.remove('text-green-400');
+            }
+        });
+
+        // Generate a random 8-character alphanumeric string for the folder name
+        randomNameBtn.addEventListener('click', () => {
+            const randomName = Math.random().toString(36).substring(2, 10);
+            folderNameInput.value = randomName;
+        });
+
+        // Main process handler for the unzip button
+        unzipBtn.addEventListener('click', handleUnzipProcess);
+
+        // --- Core Functions ---
+
+        /**
+         * Generates a random 8-character alphanumeric string.
+         * @returns {string} A random string.
+         */
+        function generateRandomString() {
+            return Math.random().toString(36).substring(2, 10);
+        }
+
+        /**
+         * Main function to handle the file processing logic.
+         */
+        async function handleUnzipProcess() {
+            const files = zipInput.files;
+            let folderName = folderNameInput.value.trim();
+
+            // Validate inputs
+            if (files.length === 0) {
+                alert('Please select at least one .zip file to process.');
+                return;
+            }
+            if (!folderName) {
+                alert('Please provide a folder name or generate a random one.');
+                return;
+            }
+
+            // Prepare UI for processing
+            unzipBtn.disabled = true;
+            unzipBtn.textContent = 'Processing...';
+            loadingSpinner.classList.remove('hidden');
+            resultsContainer.innerHTML = ''; // Clear previous results
+            resultsPlaceholder.classList.add('hidden');
+
+            // This function simulates creating a folder structure in the UI.
+            // A website cannot create real folders on your computer.
+            const folderElement = createFolderElement(folderName);
+            resultsContainer.appendChild(folderElement);
+            const imageGrid = folderElement.querySelector('.image-grid');
+
+            // Process each selected zip file
+            for (const file of files) {
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    // Iterate through each item in the zip archive
+                    for (const filename in zip.files) {
+                        const zipEntry = zip.files[filename];
+                        // Skip directories and non-image files
+                        if (zipEntry.dir || !isImageFile(filename)) {
+                            continue;
+                        }
+                        
+                        // Extract the image as a Blob
+                        const imageBlob = await zipEntry.async('blob');
+                        // Create a temporary URL for the image
+                        const imageUrl = URL.createObjectURL(imageBlob);
+                        // Create and append the image element to the grid
+                        const imgElement = createImageElement(imageUrl, filename);
+                        imageGrid.appendChild(imgElement);
+                    }
+                } catch (error) {
+                    console.error('Error processing zip file:', file.name, error);
+                    const errorElement = document.createElement('p');
+                    errorElement.className = 'text-red-400 text-center';
+                    errorElement.textContent = `Failed to process ${file.name}. It might be corrupted or not a valid zip file.`;
+                    resultsContainer.appendChild(errorElement);
+                }
+            }
+            
+            // Finalize UI
+            loadingSpinner.classList.add('hidden');
+            unzipBtn.disabled = false;
+            unzipBtn.textContent = 'Unzip & Organize Images';
+        }
+
+        /**
+         * Checks if a filename has an image extension.
+         * @param {string} filename - The name of the file.
+         * @returns {boolean} True if it's an image file.
+         */
+        function isImageFile(filename) {
+            const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+            return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+        }
+        
+        /**
+         * Creates the visual representation of a folder.
+         * @param {string} name - The name of the folder.
+         * @returns {HTMLElement} The folder div element.
+         */
+        function createFolderElement(name) {
+            const folderDiv = document.createElement('div');
+            folderDiv.className = 'bg-gray-800 rounded-lg p-4 mb-4';
+            
+            const folderHeader = document.createElement('div');
+            folderHeader.className = 'flex items-center text-xl font-semibold text-indigo-300 mb-4';
+            folderHeader.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
+                <span>${name}</span>
+            `;
+            
+            const imageGrid = document.createElement('div');
+            imageGrid.className = 'image-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4';
+            
+            folderDiv.appendChild(folderHeader);
+            folderDiv.appendChild(imageGrid);
+            
+            return folderDiv;
+        }
+
+        /**
+         * Creates an image element with a caption for display in the grid.
+         * @param {string} url - The temporary URL of the image.
+         * @param {string} caption - The original filename of the image.
+         * @returns {HTMLElement} The image container div.
+         */
+        function createImageElement(url, caption) {
+            const container = document.createElement('div');
+            container.className = 'relative group bg-gray-900 rounded-lg overflow-hidden shadow-lg';
+
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = caption;
+            img.className = 'w-full h-32 object-cover transition-transform duration-300 group-hover:scale-110';
+            // Clean up the object URL when the image is no longer needed to free up memory
+            img.onload = () => { URL.revokeObjectURL(img.src); };
+
+            const captionDiv = document.createElement('div');
+            captionDiv.className = 'absolute bottom-0 left-0 right-0 bg-black/60 p-2 text-xs text-white truncate';
+            captionDiv.textContent = caption.split('/').pop(); // Show only the filename
+
+            container.appendChild(img);
+            container.appendChild(captionDiv);
+            
+            return container;
+        }
+
+    </script>
+</body>
+</html>
