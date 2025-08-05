@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Heart (MH) Emoji</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* bg-gray-900 */
+        }
+
+        /* Animation for the falling blood drop */
+        @keyframes bleed {
+            0% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            80% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+        }
+
+        .blood-drop-animated {
+            /* The animation will run for 2 seconds, with a slight delay, and repeat infinitely */
+            animation: bleed 2s ease-out infinite;
+            animation-delay: 0.5s;
+        }
+    </style>
+</head>
+<body class="text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-8">
+        <!-- Header Section -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">My Heart (MH) Emoji</h1>
+            <p class="text-gray-400 mt-2">Animated and static versions of your custom emoji.</p>
+        </div>
+
+        <!-- Emoji Display Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            
+            <!-- Animated Version -->
+            <div class="text-center bg-gray-700/50 p-6 rounded-xl">
+                <h2 class="text-2xl font-semibold text-white mb-4">Animated Version (GIF)</h2>
+                <div class="flex justify-center items-center">
+                    <svg class="w-48 h-48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Pink Heart -->
+                        <path d="M12.0001 21.35L10.5501 20.03C5.40009 15.36 2.00009 12.28 2.00009 8.5C2.00009 5.42 4.42009 3 7.50009 3C9.24009 3 10.9101 3.81 12.0001 5.09C13.0901 3.81 14.7601 3 16.5001 3C19.5801 3 22.0001 5.42 22.0001 8.5C22.0001 12.28 18.6001 15.36 13.4501 20.04L12.0001 21.35Z" fill="#F472B6"/>
+                        <!-- Animated Blood Drop -->
+                        <g class="blood-drop-animated">
+                             <path d="M7 14C7 14.5523 6.55228 15 6 15C5.44772 15 5 14.5523 5 14C5 13.4477 6 12.5 6 12.5C6 12.5 7 13.4477 7 14Z" fill="#EF4444"/>
+                        </g>
+                        <!-- Band-Aid (Drawn last to be on top) -->
+                        <g transform="rotate(-45 8 8)">
+                            <rect x="4" y="7" width="8" height="3" rx="1.5" fill="#FDE68A"/>
+                            <rect x="6.5" y="6.5" width="3" height="4" fill="#FFFBEB"/>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Static Version -->
+            <div class="text-center bg-gray-700/50 p-6 rounded-xl">
+                <h2 class="text-2xl font-semibold text-white mb-4">Static Version</h2>
+                 <div class="flex justify-center items-center">
+                    <svg class="w-48 h-48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Pink Heart -->
+                        <path d="M12.0001 21.35L10.5501 20.03C5.40009 15.36 2.00009 12.28 2.00009 8.5C2.00009 5.42 4.42009 3 7.50009 3C9.24009 3 10.9101 3.81 12.0001 5.09C13.0901 3.81 14.7601 3 16.5001 3C19.5801 3 22.0001 5.42 22.0001 8.5C22.0001 12.28 18.6001 15.36 13.4501 20.04L12.0001 21.35Z" fill="#F472B6"/>
+                        <!-- Static Blood Drop -->
+                        <path d="M7 14C7 14.5523 6.55228 15 6 15C5.44772 15 5 14.5523 5 14C5 13.4477 6 12.5 6 12.5C6 12.5 7 13.4477 7 14Z" fill="#EF4444"/>
+                        <!-- Band-Aid (Drawn last to be on top) -->
+                        <g transform="rotate(-45 8 8)">
+                            <rect x="4" y="7" width="8" height="3" rx="1.5" fill="#FDE68A"/>
+                            <rect x="6.5" y="6.5" width="3" height="4" fill="#FFFBEB"/>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</body>
+</html>
