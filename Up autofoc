@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Upscaler</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip library to handle zip files in the browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Updated FileSaver.js library to save files to the local filesystem -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the file input button */
+        .file-input-button {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        /* Style for when a file is dragged over the drop zone */
+        .drag-over {
+            border-color: #4f46e5; /* Indigo */
+            background-color: #3730a3; /* Darker Indigo */
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096;
+        }
+        .preview-canvas {
+            border: 2px dashed #4a5568;
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-6xl bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
+        <!-- Header Section -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Image Resolution Upscaler</h1>
+            <p class="text-gray-400 mt-2">Enlarge your JPG & PNG images. Select images, choose a scale factor, and download the results.</p>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="bg-gray-700/50 p-6 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            <!-- Step 1: Upload Files -->
+            <div class="space-y-2">
+                <label class="text-lg font-semibold text-white">1. Upload Images</label>
+                <input type="file" id="image-files-input" multiple accept=".png, .jpg, .jpeg" class="hidden">
+                <label for="image-files-input" id="drop-zone" class="file-input-button w-full text-center px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex flex-col items-center justify-center border-2 border-dashed border-transparent h-28">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h10a4 4 0 014 4v5a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4"></path></svg>
+                    <span>Select Images or Drag & Drop</span>
+                </label>
+                <p id="file-selection-text" class="text-gray-400 text-sm text-center">No images selected.</p>
+            </div>
+
+            <!-- Step 2: Choose Scale Factor -->
+            <div class="space-y-2">
+                <label class="text-lg font-semibold text-white">2. Choose Scale Factor</label>
+                <div id="scale-factor" class="flex justify-center bg-gray-800 rounded-lg p-1">
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="2x"><input type="radio" name="scale" value="2" id="2x" class="sr-only" checked>2x</label>
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="4x"><input type="radio" name="scale" value="4" id="4x" class="sr-only">4x</label>
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="8x"><input type="radio" name="scale" value="8" id="8x" class="sr-only">8x</label>
+                </div>
+            </div>
+
+            <!-- Step 3: Process -->
+            <div class="space-y-2">
+                 <label class="text-lg font-semibold text-white opacity-0 hidden md:block">3. Generate</label>
+                <button id="upscale-btn" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-300 font-bold text-lg disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    Upscale Images
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="hidden text-center py-4">
+            <svg class="animate-spin h-8 w-8 text-indigo-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p class="mt-2 text-lg font-semibold">Upscaling... Please wait.</p>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="results-header" class="hidden justify-between items-center mt-4">
+            <h2 class="text-2xl font-bold">Upscaled Previews</h2>
+            <button id="download-all-btn" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors duration-300 font-semibold flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Download All as Zip
+            </button>
+        </div>
+        <div id="results-container" class="bg-gray-900/70 p-4 rounded-xl min-h-[200px] max-h-[60vh] overflow-y-auto space-y-4">
+            <p id="results-placeholder" class="text-gray-500 text-center py-10">Your upscaled images will appear here.</p>
+        </div>
+
+        <!-- Feedback Section -->
+        <div id="feedback-section" class="hidden bg-gray-700/50 p-6 rounded-xl mt-6 space-y-4 text-center">
+            <h2 class="text-2xl font-bold">Feedback & Support</h2>
+            <p class="text-gray-300">
+                Encounter an issue or have feedback? Please email <strong class="text-indigo-300">Brian.Shirley@Angi.com</strong>.
+                Click the button below to copy the diagnostic report and paste it into your email to help us understand the issue.
+            </p>
+            <button id="copy-diagnostics-btn" class="w-full sm:w-auto mx-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-300 font-bold">Copy Diagnostic Info</button>
+        </div>
+
+    </div>
+
+    <!-- Footer Copyright -->
+    <footer class="fixed bottom-4 right-4 flex items-center space-x-2 text-gray-500 text-xs">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12.0001 21.35L10.5501 20.03C5.40009 15.36 2.00009 12.28 2.00009 8.5C2.00009 5.42 4.42009 3 7.50009 3C9.24009 3 10.9101 3.81 12.0001 5.09C13.0901 3.81 14.7601 3 16.5001 3C19.5801 3 22.0001 5.42 22.0001 8.5C22.0001 12.28 18.6001 15.36 13.4501 20.04L12.0001 21.35Z" fill="#F472B6"/>
+            <path d="M6 9L8 7" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M5 11L7 9" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M4 13L6 11" stroke="#333" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M7 14C7 14.5523 6.55228 15 6 15C5.44772 15 5 14.5523 5 14C5 13.4477 6 12.5 6 12.5C6 12.5 7 13.4477 7 14Z" fill="#EF4444"/>
+        </svg>
+        <span>this website was created by Brian using vibes</span>
+        <span class="text-base leading-none">;)</span>
+    </footer>
+
+    <script>
+        // --- DOM Element References ---
+        const imageInput = document.getElementById('image-files-input');
+        const fileSelectionText = document.getElementById('file-selection-text');
+        const upscaleBtn = document.getElementById('upscale-btn');
+        const scaleFactorContainer = document.getElementById('scale-factor');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const resultsContainer = document.getElementById('results-container');
+        const resultsHeader = document.getElementById('results-header');
+        const downloadAllBtn = document.getElementById('download-all-btn');
+        const resultsPlaceholder = document.getElementById('results-placeholder');
+        const dropZone = document.getElementById('drop-zone');
+        const feedbackSection = document.getElementById('feedback-section');
+        const copyDiagnosticsBtn = document.getElementById('copy-diagnostics-btn');
+
+        // --- Global State ---
+        let upscaledBlobs = [];
+        let diagnostics = {};
+
+        // --- Function to initialize diagnostics ---
+        function initializeDiagnostics() {
+            diagnostics = {
+                // Session Metrics
+                sessionId: crypto.randomUUID(),
+                pageLoadTimestamp: new Date().toISOString(),
+                sessionDuration: null,
+                browserInfo: navigator.userAgent,
+                screenResolution: `${window.screen.width}x${window.screen.height}`,
+                
+                // Interaction Metrics
+                timeToFirstUpload: null,
+                uploadMethod: null,
+                timeFromUploadToProcess: null,
+                scaleChanges: 0,
+                mostUsedScaleFactor: null,
+                individualDownloads: 0,
+                downloadAllClicked: false,
+                scrollDepth: 0,
+                timeSpentOnPreviews: null,
+                sessionAbandoned: true, // Default to true, set to false on process
+                mousePath: [],
+
+                // Processing Metrics
+                totalProcessingTime: null,
+                totalUpscaledOutputSize: 0,
+                processingErrors: [],
+                imageReports: []
+            };
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('load', () => {
+            initializeDiagnostics();
+            diagnostics.mousePath.push({ event: 'pageLoad', timestamp: Date.now() });
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (diagnostics.pageLoadTimestamp) {
+                diagnostics.sessionDuration = `${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds`;
+            }
+            // FIX: Correctly calculate time spent on previews if user leaves without downloading
+            if (diagnostics.timeSpentOnPreviews && typeof diagnostics.timeSpentOnPreviews === 'number') {
+                diagnostics.timeSpentOnPreviews = `${(Date.now() - diagnostics.timeSpentOnPreviews) / 1000} seconds`;
+            }
+            console.log("Final diagnostics on exit:", diagnostics);
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            if (!diagnostics.timeToFirstUpload) {
+                diagnostics.timeToFirstUpload = `${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds`;
+                diagnostics.timeFromUploadToProcess = Date.now(); // Start timer
+            }
+            if (!diagnostics.uploadMethod) {
+                 diagnostics.uploadMethod = 'ButtonClick';
+            }
+            updateFileSelectionUI(imageInput.files);
+        });
+
+        scaleFactorContainer.addEventListener('change', (e) => {
+            if (e.target.type === 'radio') {
+                diagnostics.scaleChanges++;
+                diagnostics.mousePath.push({ event: 'scaleChange', value: e.target.value, timestamp: Date.now() });
+                document.querySelectorAll('#scale-factor label').forEach(label => {
+                    label.style.backgroundColor = '';
+                    label.style.color = '';
+                });
+                e.target.parentElement.style.backgroundColor = '#4f46e5';
+                e.target.parentElement.style.color = 'white';
+            }
+        });
+        document.querySelector('#scale-factor input:checked').parentElement.style.backgroundColor = '#4f46e5';
+        document.querySelector('#scale-factor input:checked').parentElement.style.color = 'white';
+
+        upscaleBtn.addEventListener('click', handleUpscaleProcess);
+        downloadAllBtn.addEventListener('click', (e) => {
+            diagnostics.downloadAllClicked = true;
+            diagnostics.mousePath.push({ event: 'downloadAll', x: e.clientX, y: e.clientY, timestamp: Date.now() });
+            downloadAllAsZip();
+        });
+        
+        resultsContainer.addEventListener('scroll', () => {
+            const { scrollTop, scrollHeight, clientHeight } = resultsContainer;
+            const currentDepth = Math.round(((scrollTop + clientHeight) / scrollHeight) * 100);
+            if (currentDepth > diagnostics.scrollDepth) {
+                diagnostics.scrollDepth = currentDepth;
+            }
+        });
+
+        // --- Drag and Drop Event Listeners ---
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+        ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false));
+        ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false));
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+        function handleDrop(e) {
+            diagnostics.uploadMethod = 'DragAndDrop';
+            diagnostics.mousePath.push({ event: 'drop', x: e.clientX, y: e.clientY, timestamp: Date.now() });
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            const dataTransfer = new DataTransfer();
+            Array.from(files).filter(file => file.type.startsWith('image/')).forEach(file => dataTransfer.items.add(file));
+            imageInput.files = dataTransfer.files;
+            imageInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // --- Feedback and Diagnostics ---
+        copyDiagnosticsBtn.addEventListener('click', () => {
+            let reportString = `--- DIAGNOSTIC REPORT ---\n\n`;
+            reportString += `## SESSION METRICS\n`;
+            reportString += `Session ID: ${diagnostics.sessionId}\n`;
+            reportString += `Timestamp: ${diagnostics.pageLoadTimestamp}\n`;
+            reportString += `Session Duration: ${diagnostics.sessionDuration || 'In Progress'}\n`;
+            reportString += `Browser: ${diagnostics.browserInfo}\n`;
+            reportString += `Screen Resolution: ${diagnostics.screenResolution}\n\n`;
+
+            reportString += `## USER INTERACTION METRICS\n`;
+            reportString += `Time to First Upload: ${diagnostics.timeToFirstUpload}\n`;
+            reportString += `Upload Method: ${diagnostics.uploadMethod}\n`;
+            reportString += `Time from Upload to Process: ${diagnostics.timeFromUploadToProcess}\n`;
+            reportString += `Scale Factor Changes: ${diagnostics.scaleChanges}\n`;
+            reportString += `Final Scale Factor: ${diagnostics.mostUsedScaleFactor}\n`;
+            reportString += `Individual Downloads: ${diagnostics.individualDownloads}\n`;
+            reportString += `Download All Clicked: ${diagnostics.downloadAllClicked}\n`;
+            reportString += `Max Scroll Depth in Results: ${diagnostics.scrollDepth}%\n`;
+            reportString += `Time Spent on Previews: ${diagnostics.timeSpentOnPreviews || 'N/A'}\n`;
+            reportString += `Session Abandoned: ${diagnostics.sessionAbandoned}\n\n`;
+
+            reportString += `## OVERALL PROCESSING METRICS\n`;
+            reportString += `Total Processing Time: ${diagnostics.totalProcessingTime}\n`;
+            reportString += `Total Upscaled Output Size: ${(diagnostics.totalUpscaledOutputSize / 1024).toFixed(2)} KB\n`;
+            reportString += `Processing Errors: ${diagnostics.processingErrors.length > 0 ? diagnostics.processingErrors.join(', ') : 'None'}\n\n`;
+
+            reportString += `## INDIVIDUAL IMAGE REPORTS (${diagnostics.imageReports.length})\n`;
+            diagnostics.imageReports.forEach((report, index) => {
+                reportString += `----------------------------------------\n`;
+                reportString += `IMAGE ${index + 1}:\n`;
+                reportString += `  File Name: ${report.fileName}\n`;
+                reportString += `  File Type: ${report.fileType}\n`;
+                reportString += `  Original Dimensions: ${report.originalDimensions}\n`;
+                reportString += `  Upscaled Dimensions: ${report.upscaledDimensions}\n`;
+                reportString += `  Aspect Ratio: ${report.aspectRatio}\n`;
+                reportString += `  Original Size: ${report.originalSize}\n`;
+                reportString += `  Upscaled Size: ${report.upscaledSize}\n`;
+                reportString += `  Total Pixels Processed: ${report.totalPixelsProcessed}\n`;
+                reportString += `  Processing Time: ${report.processingTime}\n`;
+            });
+            
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = reportString;
+            document.body.appendChild(tempTextarea);
+            tempTextarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextarea);
+
+            copyDiagnosticsBtn.textContent = 'Copied!';
+            setTimeout(() => { copyDiagnosticsBtn.textContent = 'Copy Diagnostic Info'; }, 2000);
+        });
+
+        // --- Core Functions ---
+        function updateFileSelectionUI(files) {
+            const count = files.length;
+            if (count > 0) {
+                fileSelectionText.textContent = `${count} image(s) selected.`;
+                fileSelectionText.classList.add('text-green-400');
+            } else {
+                fileSelectionText.textContent = 'No images selected.';
+                fileSelectionText.classList.remove('text-green-400');
+            }
+        }
+
+        async function handleUpscaleProcess() {
+            const files = imageInput.files;
+            const scaleFactor = parseInt(document.querySelector('input[name="scale"]:checked').value);
+
+            if (files.length === 0) { alert('Please select at least one image file.'); return; }
+
+            // --- Start Tracking for this Process ---
+            diagnostics.sessionAbandoned = false;
+            diagnostics.mostUsedScaleFactor = `${scaleFactor}x`;
+            if (diagnostics.timeFromUploadToProcess) {
+                diagnostics.timeFromUploadToProcess = `${(Date.now() - diagnostics.timeFromUploadToProcess) / 1000} seconds`;
+            }
+            diagnostics.mousePath.push({ event: 'upscaleClick', timestamp: Date.now() });
+
+            // UI Prep
+            upscaleBtn.disabled = true;
+            upscaleBtn.textContent = 'Processing...';
+            loadingSpinner.classList.remove('hidden');
+            resultsContainer.innerHTML = '';
+            resultsHeader.classList.add('hidden');
+            feedbackSection.classList.add('hidden');
+            resultsPlaceholder.classList.add('hidden');
+            upscaledBlobs = [];
+            
+            const overallStartTime = Date.now();
+            const imageReports = [];
+            diagnostics.processingErrors = [];
+            diagnostics.totalUpscaledOutputSize = 0;
+
+            for (const file of files) {
+                try {
+                    const { previewElement, report } = await createImagePreview(file, scaleFactor);
+                    resultsContainer.appendChild(previewElement);
+                    imageReports.push(report);
+                    diagnostics.totalUpscaledOutputSize += report.rawUpscaledSize;
+                } catch (error) {
+                    console.error('Error processing file:', file.name, error);
+                    diagnostics.processingErrors.push(file.name);
+                }
+            }
+
+            const overallEndTime = Date.now();
+            diagnostics.totalProcessingTime = `${(overallEndTime - overallStartTime) / 1000} seconds`;
+            diagnostics.imageReports = imageReports;
+
+            // Finalize UI
+            upscaleBtn.disabled = false;
+            upscaleBtn.textContent = 'Upscale Images';
+            loadingSpinner.classList.add('hidden');
+            if(upscaledBlobs.length > 0) {
+                resultsHeader.classList.remove('hidden');
+                resultsHeader.classList.add('flex');
+                feedbackSection.classList.remove('hidden');
+                diagnostics.timeSpentOnPreviews = Date.now(); // Start preview timer
+            }
+        }
+
+        function createImagePreview(file, scaleFactor) {
+            return new Promise((resolve, reject) => {
+                const individualStartTime = Date.now();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const originalWidth = img.width;
+                        const originalHeight = img.height;
+                        const newWidth = originalWidth * scaleFactor;
+                        const newHeight = originalHeight * scaleFactor;
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = newWidth;
+                        canvas.height = newHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+                        const previewContainer = document.createElement('div');
+                        previewContainer.className = 'bg-gray-800 p-4 rounded-lg';
+
+                        const grid = document.createElement('div');
+                        grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4 items-center';
+
+                        // --- Original Image Side ---
+                        const originalDiv = document.createElement('div');
+                        originalDiv.className = 'text-center';
+                        originalDiv.innerHTML = `<h3 class="font-bold text-lg mb-2">Original</h3><img src="${img.src}" class="max-w-full h-auto mx-auto rounded-md"><p class="text-sm text-gray-400 mt-2">${originalWidth} x ${originalHeight}px</p>`;
+
+                        // --- Upscaled Image Side (FIXED) ---
+                        const upscaledDiv = document.createElement('div');
+                        upscaledDiv.className = 'text-center';
+                        
+                        const upscaledTitle = document.createElement('h3');
+                        upscaledTitle.className = 'font-bold text-lg mb-2';
+                        upscaledTitle.textContent = `Upscaled (${scaleFactor}x)`;
+                        
+                        const upscaledCanvasDisplay = document.createElement('canvas');
+                        upscaledCanvasDisplay.width = newWidth;
+                        upscaledCanvasDisplay.height = newHeight;
+                        upscaledCanvasDisplay.getContext('2d').drawImage(canvas, 0, 0);
+                        upscaledCanvasDisplay.className = 'max-w-full h-auto mx-auto rounded-md preview-canvas';
+                        
+                        const upscaledDimensions = document.createElement('p');
+                        upscaledDimensions.className = 'text-sm text-gray-400 mt-2';
+                        upscaledDimensions.textContent = `${newWidth} x ${newHeight}px`;
+
+                        upscaledDiv.appendChild(upscaledTitle);
+                        upscaledDiv.appendChild(upscaledCanvasDisplay);
+                        upscaledDiv.appendChild(upscaledDimensions);
+
+                        grid.appendChild(originalDiv);
+                        grid.appendChild(upscaledDiv);
+                        
+                        const infoDiv = document.createElement('div');
+                        infoDiv.className = 'mt-4 flex justify-between items-center';
+                        infoDiv.innerHTML = `<p class="text-sm text-gray-300 truncate pr-4">${file.name}</p>`;
+                        const downloadBtn = document.createElement('button');
+                        downloadBtn.className = 'px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors font-semibold flex items-center flex-shrink-0';
+                        downloadBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download`;
+                        
+                        canvas.toBlob((blob) => {
+                            if (!blob) { reject(new Error('Canvas to Blob failed.')); return; }
+                            
+                            const upscaledFileName = `upscaled_${scaleFactor}x_${file.name}`;
+                            upscaledBlobs.push({ name: upscaledFileName, blob: blob });
+                            downloadBtn.onclick = (e) => {
+                                diagnostics.individualDownloads++;
+                                diagnostics.mousePath.push({ event: 'individualDownload', x: e.clientX, y: e.clientY, timestamp: Date.now() });
+                                if (diagnostics.timeSpentOnPreviews && typeof diagnostics.timeSpentOnPreviews === 'number') {
+                                    diagnostics.timeSpentOnPreviews = `${(Date.now() - diagnostics.timeSpentOnPreviews) / 1000} seconds`;
+                                }
+                                saveAs(blob, upscaledFileName);
+                            };
+                            
+                            const individualEndTime = Date.now();
+                            const report = {
+                                fileName: file.name,
+                                fileType: file.type,
+                                originalDimensions: `${originalWidth}x${originalHeight}`,
+                                upscaledDimensions: `${newWidth}x${newHeight}`,
+                                aspectRatio: (originalWidth/originalHeight).toFixed(2),
+                                originalSize: `${(file.size / 1024).toFixed(2)} KB`,
+                                upscaledSize: `${(blob.size / 1024).toFixed(2)} KB`,
+                                rawUpscaledSize: blob.size,
+                                totalPixelsProcessed: newWidth * newHeight,
+                                processingTime: `${individualEndTime - individualStartTime} ms`
+                            };
+
+                            infoDiv.appendChild(downloadBtn);
+                            previewContainer.appendChild(grid);
+                            previewContainer.appendChild(infoDiv);
+                            resolve({ previewElement: previewContainer, report: report });
+                        }, file.type);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function downloadAllAsZip() {
+            if (upscaledBlobs.length === 0) { alert('No upscaled images to download.'); return; }
+            if (diagnostics.timeSpentOnPreviews && typeof diagnostics.timeSpentOnPreviews === 'number') {
+                 diagnostics.timeSpentOnPreviews = `${(Date.now() - diagnostics.timeSpentOnPreviews) / 1000} seconds`;
+            }
+            const zip = new JSZip();
+            for (const item of upscaledBlobs) { zip.file(item.name, item.blob); }
+
+            downloadAllBtn.disabled = true;
+            downloadAllBtn.innerHTML = 'Zipping...';
+
+            try {
+                const content = await zip.generateAsync({ type: 'blob' });
+                if (content instanceof Blob) { saveAs(content, 'upscaled_images.zip'); } 
+                else { alert('An error occurred while creating the zip file.'); }
+            } catch (error) {
+                console.error("Error creating zip file:", error);
+                alert("An error occurred while creating the zip file.");
+            } finally {
+                downloadAllBtn.disabled = false;
+                downloadAllBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download All as Zip`;
+            }
+        }
+
+    </script>
+</body>
+</html>
