@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Image Upscale</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip library to handle zip files in the browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Updated FileSaver.js library to save files to the local filesystem -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for the file input button */
+        .file-input-button {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+        }
+        /* Style for when a file is dragged over the drop zone */
+        .drag-over {
+            border-color: #4f46e5; /* Indigo */
+            background-color: #3730a3; /* Darker Indigo */
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #718096;
+        }
+        .preview-canvas {
+            border: 2px dashed #4a5568;
+            border-radius: 0.5rem;
+        }
+        /* Pulsating animation for the drop zone */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+            50% { box-shadow: 0 0 20px 10px rgba(79, 70, 229, 0); }
+        }
+        .pulse-animate {
+            animation: pulse-glow 3s infinite;
+        }
+        .rotate-icon {
+            transition: transform 0.3s ease-in-out;
+        }
+        /* Styles for the brightness slider notch */
+        .slider-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .slider-wrapper::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 12px;
+            background-color: #ef4444; /* red-500 */
+            z-index: 1;
+        }
+        .brightness-slider {
+            position: relative;
+            z-index: 2; /* Ensure thumb is above the notch */
+            background: transparent;
+        }
+        /* Make the track behind the thumb transparent for better notch visibility */
+        input[type=range]::-webkit-slider-runnable-track {
+            background: #4b5563;
+        }
+        input[type=range]::-moz-range-track {
+            background: #4b5563;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-6xl bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
+        <!-- Header Section -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Free Image Upscale</h1>
+            <p class="text-gray-400 mt-2">Enlarge your JPG & PNG images. Select images, choose a scale factor, and download the results.</p>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="bg-gray-700/50 p-6 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+            <!-- Step 1 & 2: SPID and Upload -->
+            <div class="space-y-2">
+                <label class="text-lg font-semibold text-white">1. Add SPID (Optional)</label>
+                <input type="text" id="spid-input" maxlength="17" placeholder="SPID" class="w-full bg-gray-800 border border-gray-600 text-white rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+                
+                <label class="text-lg font-semibold text-white mt-4 block">2. Upload Images</label>
+                <input type="file" id="image-files-input" multiple accept=".png, .jpg, .jpeg" class="hidden">
+                <label for="image-files-input" id="drop-zone" class="file-input-button w-full text-center px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex flex-col items-center justify-center border-2 border-dashed border-transparent h-28 pulse-animate">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h10a4 4 0 014 4v5a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4"></path></svg>
+                    <span>Select Images or Drag & Drop</span>
+                </label>
+                <p id="file-selection-text" class="text-gray-400 text-sm text-center">No images selected.</p>
+            </div>
+
+            <!-- Step 3: Choose Scale Factor -->
+            <div class="space-y-2">
+                <label class="text-lg font-semibold text-white">3. Choose Scale Factor</label>
+                <div id="scale-factor" class="flex justify-center bg-gray-800 rounded-lg p-1">
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="2x"><input type="radio" name="scale" value="2" id="2x" class="sr-only" checked>2x</label>
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="4x"><input type="radio" name="scale" value="4" id="4x" class="sr-only">4x</label>
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="8x"><input type="radio" name="scale" value="8" id="8x" class="sr-only">8x</label>
+                </div>
+            </div>
+
+            <!-- Step 4: Process -->
+            <div class="space-y-2">
+                 <label class="text-lg font-semibold text-white">4. Upscale Images</label>
+                <button id="upscale-btn" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-300 font-bold text-lg disabled:bg-gray-500 disabled:cursor-not-allowed">
+                    Upscale Images
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loading Spinner -->
+        <div id="loading-spinner" class="hidden text-center py-4">
+            <svg class="animate-spin h-8 w-8 text-indigo-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p class="mt-2 text-lg font-semibold">Upscaling... Please wait.</p>
+        </div>
+        
+        <!-- Results Section -->
+        <div id="results-header" class="hidden justify-between items-center mt-4">
+            <h2 class="text-2xl font-bold">Upscaled Previews & Editors</h2>
+            <button id="download-all-btn" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors duration-300 font-semibold flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Download All as Zip
+            </button>
+        </div>
+        <div id="results-container" class="bg-gray-900/70 p-4 rounded-xl min-h-[200px] max-h-[60vh] overflow-y-auto space-y-4">
+            <p id="results-placeholder" class="text-gray-500 text-center py-10">Your upscaled images will appear here.</p>
+        </div>
+
+        <!-- Feedback Section -->
+        <div id="feedback-section" class="hidden bg-gray-700/50 p-6 rounded-xl mt-6 space-y-4 text-center">
+            <h2 class="text-2xl font-bold">Feedback & Support</h2>
+            <p class="text-gray-300">
+                Encounter an issue or have feedback? Please email <strong class="text-indigo-300">Brian.Shirley@Angi.com</strong>.
+                Click the button below to copy the diagnostic report and paste it into your email to help us understand the issue.
+            </p>
+            <button id="copy-diagnostics-btn" class="w-full sm:w-auto mx-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-300 font-bold">Copy Diagnostic Info</button>
+        </div>
+
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const imageInput = document.getElementById('image-files-input');
+        const spidInput = document.getElementById('spid-input');
+        const fileSelectionText = document.getElementById('file-selection-text');
+        const upscaleBtn = document.getElementById('upscale-btn');
+        const scaleFactorContainer = document.getElementById('scale-factor');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const resultsContainer = document.getElementById('results-container');
+        const resultsHeader = document.getElementById('results-header');
+        const downloadAllBtn = document.getElementById('download-all-btn');
+        const resultsPlaceholder = document.getElementById('results-placeholder');
+        const dropZone = document.getElementById('drop-zone');
+        const feedbackSection = document.getElementById('feedback-section');
+        const copyDiagnosticsBtn = document.getElementById('copy-diagnostics-btn');
+
+        // --- Global State ---
+        const upscaledCanvases = new Map();
+        let diagnostics = {};
+        let intersectionObserver;
+
+        // --- Function to initialize diagnostics ---
+        function initializeDiagnostics() {
+            diagnostics = {
+                sessionId: crypto.randomUUID(),
+                pageLoadTimestamp: new Date().toISOString(),
+                sessionDuration: null,
+                browserInfo: navigator.userAgent,
+                screenResolution: `${window.screen.width}x${window.screen.height}`,
+                timeToFirstUpload: null,
+                uploadMethod: null,
+                timeFromUploadToProcess: null,
+                scaleChanges: 0,
+                mostUsedScaleFactor: null,
+                individualDownloads: 0,
+                downloadAllClicked: false,
+                scrollDepth: 0,
+                timeSpentOnPreviews: null,
+                sessionAbandoned: true,
+                mousePath: [],
+                totalProcessingTime: null,
+                totalUpscaledOutputSize: 0,
+                processingErrors: [],
+                imageReports: [],
+                editActions: []
+            };
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('load', () => {
+            initializeDiagnostics();
+            diagnostics.mousePath.push({ event: 'pageLoad', timestamp: Date.now() });
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (diagnostics.pageLoadTimestamp) {
+                diagnostics.sessionDuration = `${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds`;
+            }
+            if (diagnostics.timeSpentOnPreviews && typeof diagnostics.timeSpentOnPreviews === 'number') {
+                diagnostics.timeSpentOnPreviews = `${(Date.now() - diagnostics.timeSpentOnPreviews) / 1000} seconds`;
+            }
+        });
+
+        imageInput.addEventListener('change', (e) => {
+            if (!diagnostics.timeToFirstUpload) {
+                diagnostics.timeToFirstUpload = `${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds`;
+                diagnostics.timeFromUploadToProcess = Date.now();
+            }
+            if (!diagnostics.uploadMethod) {
+                 diagnostics.uploadMethod = 'ButtonClick';
+            }
+            updateFileSelectionUI(imageInput.files);
+        });
+
+        scaleFactorContainer.addEventListener('change', (e) => {
+            if (e.target.type === 'radio') {
+                diagnostics.scaleChanges++;
+                diagnostics.mousePath.push({ event: 'scaleChange', value: e.target.value, timestamp: Date.now() });
+                document.querySelectorAll('#scale-factor label').forEach(label => {
+                    label.style.backgroundColor = '';
+                    label.style.color = '';
+                });
+                e.target.parentElement.style.backgroundColor = '#4f46e5';
+                e.target.parentElement.style.color = 'white';
+            }
+        });
+        document.querySelector('#scale-factor input:checked').parentElement.style.backgroundColor = '#4f46e5';
+        document.querySelector('#scale-factor input:checked').parentElement.style.color = 'white';
+
+        upscaleBtn.addEventListener('click', handleUpscaleProcess);
+        downloadAllBtn.addEventListener('click', (e) => {
+            diagnostics.downloadAllClicked = true;
+            diagnostics.mousePath.push({ event: 'downloadAll', x: e.clientX, y: e.clientY, timestamp: Date.now() });
+            downloadAllAsZip();
+        });
+        
+        resultsContainer.addEventListener('scroll', () => {
+            const { scrollTop, scrollHeight, clientHeight } = resultsContainer;
+            const currentDepth = Math.round(((scrollTop + clientHeight) / scrollHeight) * 100);
+            if (currentDepth > diagnostics.scrollDepth) {
+                diagnostics.scrollDepth = currentDepth;
+            }
+        });
+
+        // --- Drag and Drop Event Listeners ---
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+        ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false));
+        ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false));
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+        function handleDrop(e) {
+            diagnostics.uploadMethod = 'DragAndDrop';
+            diagnostics.mousePath.push({ event: 'drop', x: e.clientX, y: e.clientY, timestamp: Date.now() });
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            const dataTransfer = new DataTransfer();
+            Array.from(files).filter(file => file.type.startsWith('image/')).forEach(file => dataTransfer.items.add(file));
+            imageInput.files = dataTransfer.files;
+            imageInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // --- Feedback and Diagnostics ---
+        copyDiagnosticsBtn.addEventListener('click', () => {
+            let reportString = `--- DIAGNOSTIC REPORT ---\n\n`;
+            reportString += `## SESSION METRICS\n`;
+            reportString += `Session ID: ${diagnostics.sessionId}\n`;
+            reportString += `Timestamp: ${diagnostics.pageLoadTimestamp}\n`;
+            reportString += `Session Duration: ${diagnostics.sessionDuration || `${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds (In Progress)`}\n`;
+            reportString += `Browser: ${diagnostics.browserInfo}\n`;
+            reportString += `Screen Resolution: ${diagnostics.screenResolution}\n\n`;
+
+            reportString += `## USER INTERACTION METRICS\n`;
+            reportString += `Time to First Upload: ${diagnostics.timeToFirstUpload}\n`;
+            reportString += `Upload Method: ${diagnostics.uploadMethod}\n`;
+            reportString += `Time from Upload to Process: ${diagnostics.timeFromUploadToProcess}\n`;
+            reportString += `Scale Factor Changes: ${diagnostics.scaleChanges}\n`;
+            reportString += `Final Scale Factor: ${diagnostics.mostUsedScaleFactor}\n`;
+            reportString += `Individual Downloads: ${diagnostics.individualDownloads}\n`;
+            reportString += `Download All Clicked: ${diagnostics.downloadAllClicked}\n`;
+            reportString += `Max Scroll Depth in Results: ${diagnostics.scrollDepth}%\n`;
+            reportString += `Time Spent on Previews: ${diagnostics.timeSpentOnPreviews || 'N/A'}\n`;
+            reportString += `Session Abandoned: ${diagnostics.sessionAbandoned}\n`;
+            reportString += `Edit Actions: ${diagnostics.editActions.length}\n\n`;
+
+            reportString += `## OVERALL PROCESSING METRICS\n`;
+            reportString += `Total Processing Time: ${diagnostics.totalProcessingTime}\n`;
+            reportString += `Total Upscaled Output Size: ${(diagnostics.totalUpscaledOutputSize / 1024).toFixed(2)} KB\n`;
+            reportString += `Processing Errors: ${diagnostics.processingErrors.length > 0 ? diagnostics.processingErrors.join(', ') : 'None'}\n\n`;
+
+            reportString += `## INDIVIDUAL IMAGE REPORTS (${diagnostics.imageReports.length})\n`;
+            diagnostics.imageReports.forEach((report, index) => {
+                reportString += `----------------------------------------\n`;
+                reportString += `IMAGE ${index + 1}:\n`;
+                reportString += `  File Name: ${report.fileName}\n`;
+                reportString += `  File Type: ${report.fileType}\n`;
+                reportString += `  Original Dimensions: ${report.originalDimensions}\n`;
+                reportString += `  Upscaled Dimensions: ${report.upscaledDimensions}\n`;
+                reportString += `  Aspect Ratio: ${report.aspectRatio}\n`;
+                reportString += `  Original Size: ${report.originalSize}\n`;
+                reportString += `  Upscaled Size: ${report.upscaledSize}\n`;
+                reportString += `  Total Pixels Processed: ${report.totalPixelsProcessed}\n`;
+                reportString += `  Processing Time: ${report.processingTime}\n`;
+            });
+            
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = reportString;
+            document.body.appendChild(tempTextarea);
+            tempTextarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextarea);
+
+            copyDiagnosticsBtn.textContent = 'Copied!';
+            setTimeout(() => { copyDiagnosticsBtn.textContent = 'Copy Diagnostic Info'; }, 2000);
+        });
+
+        // --- Core Functions ---
+        function updateFileSelectionUI(files) {
+            const count = files.length;
+            if (count > 0) {
+                fileSelectionText.textContent = `${count} image(s) selected.`;
+                fileSelectionText.classList.add('text-green-400');
+            } else {
+                fileSelectionText.textContent = 'No images selected.';
+                fileSelectionText.classList.remove('text-green-400');
+            }
+        }
+
+        async function handleUpscaleProcess() {
+            const files = imageInput.files;
+            const scaleFactor = parseInt(document.querySelector('input[name="scale"]:checked').value);
+            const spid = spidInput.value.trim();
+
+            if (files.length === 0) { alert('Please select at least one image file.'); return; }
+
+            diagnostics.sessionAbandoned = false;
+            diagnostics.mostUsedScaleFactor = `${scaleFactor}x`;
+            if (diagnostics.timeFromUploadToProcess && typeof diagnostics.timeFromUploadToProcess === 'number') {
+                diagnostics.timeFromUploadToProcess = `${(Date.now() - diagnostics.timeFromUploadToProcess) / 1000} seconds`;
+            }
+            diagnostics.mousePath.push({ event: 'upscaleClick', timestamp: Date.now() });
+
+            upscaleBtn.disabled = true;
+            upscaleBtn.textContent = 'Processing...';
+            loadingSpinner.classList.remove('hidden');
+            resultsContainer.innerHTML = '';
+            resultsHeader.classList.add('hidden');
+            feedbackSection.classList.add('hidden');
+            resultsPlaceholder.classList.add('hidden');
+            upscaledCanvases.clear();
+            
+            const overallStartTime = Date.now();
+            diagnostics.imageReports = [];
+            diagnostics.processingErrors = [];
+            diagnostics.totalUpscaledOutputSize = 0;
+
+            const processingPromises = Array.from(files).map((file, index) => 
+                createImagePreview(file, scaleFactor, spid, index).catch(error => {
+                    console.error('Error processing file:', file.name, error);
+                    diagnostics.processingErrors.push(file.name);
+                    const errorCard = document.createElement('div');
+                    errorCard.className = 'bg-red-900/50 p-4 rounded-lg text-center';
+                    errorCard.innerHTML = `<p class="font-bold text-red-300">Failed to process:</p><p class="text-sm truncate">${file.name}</p><p class="text-xs text-red-400 mt-1">File may be corrupted.</p>`;
+                    resultsContainer.appendChild(errorCard);
+                })
+            );
+
+            const results = await Promise.all(processingPromises);
+
+            results.forEach(result => {
+                if (result) {
+                    resultsContainer.appendChild(result.previewElement);
+                    diagnostics.imageReports.push(result.report);
+                    diagnostics.totalUpscaledOutputSize += result.report.rawUpscaledSize;
+                }
+            });
+
+            const overallEndTime = Date.now();
+            diagnostics.totalProcessingTime = `${(overallEndTime - overallStartTime) / 1000} seconds`;
+
+            upscaleBtn.disabled = false;
+            upscaleBtn.textContent = 'Upscale Images';
+            loadingSpinner.classList.add('hidden');
+            if (upscaledCanvases.size > 0) {
+                resultsHeader.classList.remove('hidden');
+                resultsHeader.classList.add('flex');
+                feedbackSection.classList.remove('hidden');
+                diagnostics.timeSpentOnPreviews = Date.now();
+            }
+        }
+
+        function createImagePreview(file, scaleFactor, spid, index) {
+            return new Promise((resolve, reject) => {
+                const individualStartTime = Date.now();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let originalWidth = img.width;
+                        let originalHeight = img.height;
+                        let newWidth = originalWidth * scaleFactor;
+                        let newHeight = originalHeight * scaleFactor;
+                        
+                        const MAX_DIMENSION = 8000;
+                        if (newWidth > MAX_DIMENSION || newHeight > MAX_DIMENSION) {
+                            const ratio = Math.min(MAX_DIMENSION / newWidth, MAX_DIMENSION / newHeight);
+                            newWidth = Math.floor(newWidth * ratio);
+                            newHeight = Math.floor(newHeight * ratio);
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = newWidth;
+                        canvas.height = newHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+                        const cardId = `card-${index}`;
+                        upscaledCanvases.set(cardId, {
+                            originalImage: img,
+                            canvas: canvas,
+                            rotation: 0,
+                            brightness: 0,
+                            fileName: file.name,
+                            fileType: file.type
+                        });
+
+                        const previewContainer = document.createElement('div');
+                        previewContainer.className = 'bg-gray-800 p-4 rounded-lg';
+                        previewContainer.id = cardId;
+
+                        previewContainer.innerHTML = `
+                            <div class="relative grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                <button class="rotate-btn absolute top-2 right-2 z-10 p-2 bg-gray-900/50 rounded-full hover:bg-gray-700/70 transition-colors flex items-center space-x-1">
+                                    <svg class="rotate-icon w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M18 6 L18 18 L6 18"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 14 L6 18 L10 22"></path>
+                                    </svg>
+                                    <span class="text-xs font-semibold text-white">90°</span>
+                                </button>
+                                
+                                <div class="text-center">
+                                    <h3 class="font-bold text-lg mb-2">Original</h3>
+                                    <img src="${img.src}" class="max-w-full h-auto mx-auto rounded-md">
+                                    <p class="text-sm text-gray-400 mt-2">${originalWidth} x ${originalHeight}px</p>
+                                </div>
+                                
+                                <div class="text-center upscaled-container">
+                                    <h3 class="font-bold text-lg mb-2">Upscaled (${scaleFactor}x)</h3>
+                                </div>
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-gray-700 space-y-2">
+                                <label class="text-sm font-semibold text-gray-300">Brightness</label>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs">Darker</span>
+                                    <div class="slider-wrapper w-full">
+                                        <input type="range" min="-100" max="100" value="0" class="brightness-slider w-full">
+                                    </div>
+                                    <span class="text-xs">Lighter</span>
+                                </div>
+                                <div class="text-center">
+                                    <button class="reset-btn mt-1 px-4 py-1 bg-red-600 text-white text-xs font-bold rounded-full hover:bg-red-700 transition-colors">Reset</button>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex justify-between items-center">
+                                <p class="text-sm text-gray-300 truncate pr-4">${file.name}</p>
+                                <button class="download-btn px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-semibold">Download</button>
+                            </div>
+                        `;
+                        
+                        const upscaledContainer = previewContainer.querySelector('.upscaled-container');
+                        upscaledContainer.appendChild(canvas);
+                        canvas.className = 'max-w-full h-auto mx-auto rounded-md preview-canvas';
+
+                        const rotateBtnIcon = previewContainer.querySelector('.rotate-icon');
+                        previewContainer.querySelector('.rotate-btn').addEventListener('click', () => {
+                            const state = upscaledCanvases.get(cardId);
+                            state.rotation = (state.rotation + 90) % 360;
+                            diagnostics.editActions.push({ file: state.fileName, action: 'rotate', value: state.rotation, timestamp: Date.now() });
+                            rotateBtnIcon.style.transform = `rotate(${state.rotation}deg)`;
+                            redrawCanvas(cardId);
+                        });
+
+                        const brightnessSlider = previewContainer.querySelector('.brightness-slider');
+                        let debounceTimer;
+                        brightnessSlider.addEventListener('input', (e) => {
+                            clearTimeout(debounceTimer);
+                            debounceTimer = setTimeout(() => {
+                                const state = upscaledCanvases.get(cardId);
+                                state.brightness = parseInt(e.target.value);
+                                diagnostics.editActions.push({ file: state.fileName, action: 'brightness', value: state.brightness, timestamp: Date.now() });
+                                redrawCanvas(cardId);
+                            }, 50); // 50ms debounce delay
+                        });
+                        
+                        previewContainer.querySelector('.reset-btn').addEventListener('click', () => {
+                            const state = upscaledCanvases.get(cardId);
+                            state.brightness = 0;
+                            brightnessSlider.value = 0;
+                            diagnostics.editActions.push({ file: state.fileName, action: 'resetBrightness', timestamp: Date.now() });
+                            redrawCanvas(cardId);
+                        });
+
+                        previewContainer.querySelector('.download-btn').addEventListener('click', () => {
+                            const state = upscaledCanvases.get(cardId);
+                            const prefix = spid ? `${spid}_` : '';
+                            const finalFileName = `${prefix}upscaled_${scaleFactor}x_${state.fileName}`;
+                            state.canvas.toBlob(blob => {
+                                const report = diagnostics.imageReports.find(r => r && r.fileName === state.fileName);
+                                if (report) {
+                                    report.upscaledSize = `${(blob.size / 1024).toFixed(2)} KB`;
+                                    report.rawUpscaledSize = blob.size;
+                                }
+                                saveAs(blob, finalFileName);
+                            }, state.fileType);
+                        });
+
+                        const individualEndTime = Date.now();
+                        const report = {
+                            fileName: file.name,
+                            fileType: file.type,
+                            originalDimensions: `${originalWidth}x${originalHeight}`,
+                            upscaledDimensions: `${newWidth}x${newHeight}`,
+                            aspectRatio: (originalWidth/originalHeight).toFixed(2),
+                            originalSize: `${(file.size / 1024).toFixed(2)} KB`,
+                            upscaledSize: 'N/A',
+                            rawUpscaledSize: 0,
+                            totalPixelsProcessed: newWidth * newHeight,
+                            processingTime: `${individualEndTime - individualStartTime} ms`
+                        };
+                        
+                        resolve({ previewElement: previewContainer, report: report });
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function redrawCanvas(cardId) {
+            const state = upscaledCanvases.get(cardId);
+            if (!state) return;
+
+            const { originalImage, canvas, rotation, brightness } = state;
+            const ctx = canvas.getContext('2d');
+            
+            const effectiveScaleFactor = (rotation === 0 || rotation === 180) 
+                ? canvas.width / originalImage.width 
+                : canvas.width / originalImage.height;
+
+            const newWidth = (rotation === 90 || rotation === 270) ? originalImage.height * effectiveScaleFactor : originalImage.width * effectiveScaleFactor;
+            const newHeight = (rotation === 90 || rotation === 270) ? originalImage.width * effectiveScaleFactor : originalImage.height * effectiveScaleFactor;
+
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+
+            const brightnessValue = 100 + (brightness / 2);
+            ctx.filter = `brightness(${brightnessValue}%)`;
+
+            ctx.save();
+            ctx.translate(newWidth / 2, newHeight / 2);
+            ctx.rotate(rotation * Math.PI / 180);
+            ctx.drawImage(originalImage, -originalImage.width * effectiveScaleFactor / 2, -originalImage.height * effectiveScaleFactor / 2, originalImage.width * effectiveScaleFactor, originalImage.height * effectiveScaleFactor);
+            ctx.restore();
+        }
+
+        async function downloadAllAsZip() {
+            if (upscaledCanvases.size === 0) { alert('No upscaled images to download.'); return; }
+            
+            const spid = spidInput.value.trim();
+            const zip = new JSZip();
+
+            for (const [cardId, state] of upscaledCanvases.entries()) {
+                const prefix = spid ? `${spid}_` : '';
+                const scaleFactor = (state.rotation === 0 || state.rotation === 180) 
+                    ? state.canvas.width / state.originalImage.width 
+                    : state.canvas.width / state.originalImage.height;
+                const fileName = `${prefix}upscaled_${scaleFactor.toFixed(0)}x_${state.fileName}`;
+                const blob = await new Promise(resolve => state.canvas.toBlob(resolve, state.fileType));
+                
+                const report = diagnostics.imageReports.find(r => r && r.fileName === state.fileName);
+                if (report) {
+                    report.upscaledSize = `${(blob.size / 1024).toFixed(2)} KB`;
+                    report.rawUpscaledSize = blob.size;
+                }
+
+                zip.file(fileName, blob);
+            }
+
+            downloadAllBtn.disabled = true;
+            downloadAllBtn.innerHTML = 'Zipping...';
+
+            try {
+                const content = await zip.generateAsync({ type: 'blob' });
+                saveAs(content, 'upscaled_images.zip');
+            } catch (error) {
+                console.error("Error creating zip file:", error);
+            } finally {
+                downloadAllBtn.disabled = false;
+                downloadAllBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download All as Zip`;
+            }
+        }
+
+    </script>
+</body>
+</html>
