@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Map File Generator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jQuery (required for Select2) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <!-- Select2 CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+    <!-- Select2 JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+    <!-- FileSaver.js for downloading the generated file -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for Select2 to match the dark theme */
+        .select2-container--default .select2-selection--multiple {
+            background-color: #1f2937; /* gray-800 */
+            border: 1px solid #4b5563; /* gray-600 */
+            border-radius: 0.5rem;
+            min-height: 42px;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice {
+            background-color: #4f46e5; /* indigo-600 */
+            border-color: #3730a3;
+            color: white;
+        }
+        .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .select2-dropdown {
+            background-color: #1f2937;
+            border: 1px solid #4b5563;
+        }
+        .select2-container--default .select2-search--inline .select2-search__field {
+            color: #d1d5db;
+        }
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: #4f46e5; /* indigo-600 */
+        }
+         .select2-container--default .select2-results__option[aria-selected=true] {
+            background-color: #374151;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl mx-auto bg-gray-800 p-8 rounded-2xl shadow-2xl">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Interactive Map File Generator</h1>
+            <p class="text-gray-400 mt-2">Generate a downloadable HTML file for your custom interactive map.</p>
+        </div>
+
+        <!-- Form -->
+        <div class="space-y-6">
+            <!-- State Selection -->
+            <div>
+                <label for="state-selector" class="block text-lg font-semibold mb-2">1. Select State(s)</label>
+                <select id="state-selector" multiple="multiple" class="w-full">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+
+            <!-- ZIP Code Entry -->
+            <div>
+                <label for="zip-codes-input" class="block text-lg font-semibold mb-2">2. Enter ZIP Codes to Highlight</label>
+                <textarea id="zip-codes-input" class="w-full h-32 bg-gray-900 border border-gray-600 rounded-md p-2 text-gray-300 resize-y" placeholder="Enter ZIP codes separated by commas, spaces, or new lines..."></textarea>
+            </div>
+
+            <!-- Generate Button -->
+            <div class="flex gap-4">
+                <button id="generate-btn" class="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-bold text-lg">Generate Map File</button>
+                <button id="copy-form-diagnostics-btn" class="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors font-bold">Copy Form Diagnostics</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            const stateSelector = $('#state-selector');
+            const generateBtn = $('#generate-btn');
+            const zipCodesInput = $('#zip-codes-input');
+            const copyFormDiagnosticsBtn = $('#copy-form-diagnostics-btn');
+
+            let formDiagnostics = {
+                pageLoadTimestamp: new Date().toISOString(),
+                timeToFirstStateSelection: null,
+                timeToZipEntry: null,
+                totalFormFillTime: null,
+                numberOfStatesSelected: 0
+            };
+
+            const states = {
+                "Alabama": "al", "Alaska": "ak", "Arizona": "az", "Arkansas": "ar", "California": "ca", "Colorado": "co", "Connecticut": "ct", "Delaware": "de", "Florida": "fl", "Georgia": "ga",
+                "Hawaii": "hi", "Idaho": "id", "Illinois": "il", "Indiana": "in", "Iowa": "ia", "Kansas": "ks", "Kentucky": "ky", "Louisiana": "la", "Maine": "me", "Maryland": "md",
+                "Massachusetts": "ma", "Michigan": "mi", "Minnesota": "mn", "Mississippi": "ms", "Missouri": "mo", "Montana": "mt", "Nebraska": "ne", "Nevada": "nv", "New Hampshire": "nh", "New Jersey": "nj",
+                "New Mexico": "nm", "New York": "ny", "North Carolina": "nc", "North Dakota": "nd", "Ohio": "oh", "Oklahoma": "ok", "Oregon": "or", "Pennsylvania": "pa", "Rhode Island": "ri", "South Carolina": "sc",
+                "South Dakota": "sd", "Tennessee": "tn", "Texas": "tx", "Utah": "ut", "Vermont": "vt", "Virginia": "va", "Washington": "wa", "West Virginia": "wv", "Wisconsin": "wi", "Wyoming": "wy"
+            };
+
+            Object.keys(states).forEach(state => {
+                stateSelector.append(new Option(state, state));
+            });
+
+            stateSelector.select2({
+                placeholder: "Type to search and select up to 5 states...",
+                maximumSelectionLength: 5,
+                width: '100%'
+            }).on('select2:select', () => {
+                if (!formDiagnostics.timeToFirstStateSelection) {
+                    formDiagnostics.timeToFirstStateSelection = `${(Date.now() - new Date(formDiagnostics.pageLoadTimestamp).getTime()) / 1000}s`;
+                }
+            });
+
+            zipCodesInput.one('input', () => {
+                 if (!formDiagnostics.timeToZipEntry) {
+                    formDiagnostics.timeToZipEntry = `${(Date.now() - new Date(formDiagnostics.pageLoadTimestamp).getTime()) / 1000}s`;
+                }
+            });
+
+            generateBtn.on('click', function() {
+                const selectedStates = stateSelector.val();
+                const zips = zipCodesInput.val().split(/[\s,]+/).filter(zip => /^\d{5}$/.test(zip.trim()));
+
+                if (!selectedStates || selectedStates.length === 0) {
+                    alert("Please select at least one state.");
+                    return;
+                }
+                
+                const stateUrls = selectedStates.reduce((acc, stateName) => {
+                    const abbr = states[stateName];
+                    const formattedStateName = stateName.toLowerCase().replace(/ /g, '_');
+                    acc[stateName] = `https://raw.githubusercontent.com/OpenDataDE/State-zip-code-GeoJSON/master/${abbr}_${formattedStateName}_zip_codes_geo.min.json`;
+                    return acc;
+                }, {});
+
+                const mapHtml = generateMapHtml(selectedStates, zips, stateUrls);
+                const blob = new Blob([mapHtml], { type: "text/html;charset=utf-8" });
+                saveAs(blob, "interactive_map.html");
+            });
+
+            copyFormDiagnosticsBtn.on('click', function() {
+                formDiagnostics.totalFormFillTime = `${(Date.now() - new Date(formDiagnostics.pageLoadTimestamp).getTime()) / 1000}s`;
+                formDiagnostics.numberOfStatesSelected = stateSelector.val().length;
+                
+                const reportString = JSON.stringify(formDiagnostics, null, 2);
+                navigator.clipboard.writeText(reportString).then(() => {
+                    alert('Form diagnostics copied to clipboard!');
+                });
+            });
+        });
+
+        function generateMapHtml(selectedStates, initialZips, stateUrls) {
+            const mapTitle = `Interactive Map: ${selectedStates.join(', ')}`;
+            const mapDescription = `Displaying ${selectedStates.join(', ')}. Click a ZIP code to select/deselect.`;
+            const initialZipsString = JSON.stringify(initialZips);
+            const stateUrlsString = JSON.stringify(stateUrls);
+
+            return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${mapTitle}</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-search@3.0.9/dist/leaflet-search.min.css" />
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        #map { height: 65vh; width: 100%; background-color: #374151; }
+        .leaflet-tooltip { background: transparent; border: none; box-shadow: none; color: #111827; font-weight: bold; font-size: 10px; text-shadow: 0 0 2px white; }
+        .search-tip { background-color: #1f2937; color: white; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex flex-col items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-7xl mx-auto">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">${mapTitle}</h1>
+            <p class="text-gray-400 mt-2">${mapDescription}</p>
+        </div>
+        <div id="map" class="rounded-lg shadow-2xl border-2 border-gray-600"></div>
+        <div class="mt-6 bg-gray-800 p-4 rounded-lg shadow-lg">
+            <label for="selected-zips" class="block text-lg font-semibold mb-2">Selected ZIP Codes:</label>
+            <div class="flex gap-4">
+                <textarea id="selected-zips" readonly class="w-full h-24 bg-gray-900 border border-gray-600 rounded-md p-2 text-gray-300 resize-none"></textarea>
+                <button id="copy-btn" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-bold self-center">Copy</button>
+            </div>
+            <button id="copy-diagnostics-btn" class="w-full mt-4 px-4 py-2 bg-green-600 text-white font-bold rounded-md hover:bg-green-500 transition-colors">Copy Diagnostics</button>
+        </div>
+    </div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+    <script src="https://unpkg.com/leaflet-search@3.0.9/dist/leaflet-search.min.js"><\/script>
+    <script>
+        const initialZips = ${initialZipsString};
+        const stateUrls = ${stateUrlsString};
+        const selectedZips = new Set(initialZips);
+        const zipToStateMap = new Map();
+        const zipToLayerMap = new Map();
+        let diagnostics = {};
+
+        function initializeDiagnostics() {
+            diagnostics = {
+                sessionId: crypto.randomUUID(), pageLoadTimestamp: new Date().toISOString(), sessionDuration: null, browserInfo: navigator.userAgent, screenResolution: \`\${window.screen.width}x\${window.screen.height}\`,
+                performance: { geoJsonDownloadTimes: {}, mapRenderTime: null, jsErrorLog: [], memoryFootprintEstimate: null, searchLatency: [], clickLatency: [] },
+                interaction: { numZipsClicked: 0, numSearchesPerformed: 0, numCopyButtonsUsed: 0, numPanZoomEvents: 0, finalSelectedZipCount: 0, finalMapView: null, invalidSearchQueries: [] }
+            };
+        }
+        initializeDiagnostics();
+
+        const map = L.map('map').setView([39.8283, -98.5795], 4);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 20 }).addTo(map);
+
+        const styles = {
+            default: { fillColor: '#6b7280', weight: 1, opacity: 1, color: '#1f2937', fillOpacity: 0.6 },
+            selected: { fillColor: '#facc15', weight: 2, opacity: 1, color: '#facc15', fillOpacity: 0.7 }
+        };
+
+        function getStyle(feature) { return selectedZips.has(feature.properties.ZCTA5CE10) ? styles.selected : styles.default; }
+
+        function onEachFeature(feature, layer) {
+            const zipCode = feature.properties.ZCTA5CE10;
+            const stateName = feature.properties.stateName;
+            zipToStateMap.set(zipCode, stateName);
+            zipToLayerMap.set(zipCode, layer);
+            layer.bindTooltip(zipCode, { permanent: true, direction: 'center', className: 'leaflet-tooltip' });
+            layer.on('click', () => {
+                const startTime = performance.now();
+                diagnostics.interaction.numZipsClicked++;
+                if (selectedZips.has(zipCode)) { selectedZips.delete(zipCode); layer.setStyle(styles.default); } 
+                else { selectedZips.add(zipCode); layer.setStyle(styles.selected); }
+                updateSelectedZipsField();
+                diagnostics.performance.clickLatency.push(performance.now() - startTime);
+            });
+        }
+
+        function updateSelectedZipsField() {
+            const stateCount = Object.keys(stateUrls).length;
+            const textarea = document.getElementById('selected-zips');
+            if (stateCount > 1) {
+                const grouped = {};
+                selectedZips.forEach(zip => {
+                    const state = zipToStateMap.get(zip) || 'Unknown';
+                    if (!grouped[state]) grouped[state] = [];
+                    grouped[state].push(zip);
+                });
+                let output = '';
+                Object.keys(grouped).sort().forEach(state => { output += \`\${state}:\\n\${grouped[state].sort().join(', ')}\\n\\n\`; });
+                textarea.value = output.trim();
+            } else {
+                textarea.value = Array.from(selectedZips).sort().join(', ');
+            }
+        }
+
+        async function initializeMap() {
+            const renderStartTime = performance.now();
+            const allFeatures = [];
+            
+            const fetchPromises = Object.entries(stateUrls).map(([stateName, url]) =>
+                fetch(url).then(res => {
+                    if (!res.ok) throw new Error(\`Failed to fetch \${stateName}\`);
+                    return res.json();
+                }).then(data => {
+                    data.features.forEach(feature => { 
+                        feature.properties.stateName = stateName;
+                        allFeatures.push(feature);
+                    });
+                    const stateLayer = L.geoJson(data, { style: getStyle, onEachFeature: onEachFeature }).addTo(map);
+                })
+            );
+
+            await Promise.all(fetchPromises);
+            
+            const combinedGeoJson = { type: "FeatureCollection", features: allFeatures };
+            const geoJsonLayer = L.geoJson(combinedGeoJson);
+            if (allFeatures.length > 0) {
+                map.fitBounds(geoJsonLayer.getBounds());
+            }
+            diagnostics.performance.mapRenderTime = performance.now() - renderStartTime;
+            updateSelectedZipsField();
+
+            const searchLayer = L.geoJson(combinedGeoJson, {
+                onEachFeature: (feature, layer) => { layer.bindPopup(feature.properties.ZCTA5CE10); }
+            });
+
+            const searchControl = new L.Control.Search({
+                layer: searchLayer,
+                propertyName: 'ZCTA5CE10',
+                initial: false,
+                zoom: 10, // ~30 mile radius
+                marker: false,
+                textPlaceholder: 'Search ZIP...'
+            });
+            map.addControl(searchControl);
+        }
+        
+        document.getElementById('copy-btn').addEventListener('click', () => {
+            diagnostics.interaction.numCopyButtonsUsed++;
+            navigator.clipboard.writeText(document.getElementById('selected-zips').value);
+        });
+        
+        document.getElementById('copy-diagnostics-btn').addEventListener('click', () => {
+             if (diagnostics.pageLoadTimestamp) {
+                diagnostics.sessionDuration = \`\${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds\`;
+            }
+            if (performance.memory) {
+                diagnostics.performance.memoryFootprintEstimate = performance.memory.usedJSHeapSize;
+            }
+            diagnostics.interaction.finalSelectedZipCount = selectedZips.size;
+            diagnostics.interaction.finalMapView = { center: map.getCenter(), zoom: map.getZoom() };
+            navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 2));
+        });
+        
+        map.on('zoomend dragend', () => { diagnostics.interaction.numPanZoomEvents++; });
+        
+        initializeMap();
+    <\/script>
+</body>
+</html>`;
+        }
+    </script>
+</body>
+</html>
