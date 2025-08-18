@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TW Competition Mat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .mat-container {
+            width: 95vw;
+            max-width: 800px;
+            aspect-ratio: 1 / 1;
+        }
+        /* Custom styles for the range slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+            cursor: pointer;
+            width: 100%;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            background: #4b5563;
+            height: 0.5rem;
+            border-radius: 0.25rem;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            margin-top: -4px;
+            background-color: #fbbf24;
+            height: 1.5rem;
+            width: 1.5rem;
+            border-radius: 9999px;
+            border: 2px solid #111827;
+        }
+        /* Modal styles */
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col justify-center items-center min-h-screen p-4">
+    
+    <div id="mat-root" class="w-full max-w-3xl">
+        <!-- SVG Container -->
+        <div class="mat-container mx-auto">
+            <svg id="mat-svg" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+                <!-- Boundary Area (Red) -->
+                <circle cx="500" cy="500" r="500" fill="#991B1B" />
+
+                <!-- The Ring (formerly Competition Circle) -->
+                <circle cx="500" cy="500" r="348" fill="#FBBF24" />
+
+                <!-- The Box -->
+                <rect id="the-box" x="226" y="226" width="548" height="548" fill="none" stroke="#111827" stroke-width="4" />
+
+                <!-- The Hub (Center Circle) - Darker Red -->
+                <circle cx="500" cy="500" r="39" fill="#7F1D1D" />
+
+                <!-- Referee's Position Starting Lines (White) -->
+                <line x1="485" y1="485" x2="485" y2="515" stroke="#E5E7EB" stroke-width="3" />
+                <line x1="515" y1="485" x2="515" y2="515" stroke="#E5E7EB" stroke-width="3" />
+                
+                <!-- Dimension Lines and Text -->
+                <defs>
+                    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#E5E7EB" />
+                    </marker>
+                </defs>
+
+                <!-- Total Diameter -->
+                <line x1="0" y1="500" x2="1000" y2="500" stroke="#E5E7EB" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+                <text x="500" y="480" font-family="Inter" font-size="24" fill="#E5E7EB" text-anchor="middle" font-weight="bold">Total Diameter: 42' 8"</text>
+
+                <!-- The Ring Diameter -->
+                <line x1="152" y1="550" x2="848" y2="550" stroke="#E5E7EB" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+                <text x="500" y="580" font-family="Inter" font-size="24" fill="#1F2937" text-anchor="middle" font-weight="bold">The Ring: 29' 6.5"</text>
+
+                <!-- The Box Dimension -->
+                <line id="box-dim-line" x1="226" y1="790" x2="774" y2="790" stroke="#E5E7EB" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+                <text id="box-dim-text" x="500" y="770" font-family="Inter" font-size="24" fill="#E5E7EB" text-anchor="middle" font-weight="bold">The Box: 23'</text>
+
+                <!-- The Hub Dimension -->
+                <line x1="500" y1="539" x2="500" y2="570" stroke="#1F2937" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+                <text x="500" y="530" font-family="Inter" font-size="16" fill="#1F2937" text-anchor="middle" font-weight="bold">The Hub: 3' 3.5"</text>
+
+                <!-- Labels -->
+                <text x="500" y="50" font-family="Inter" font-size="20" fill="#E5E7EB" text-anchor="middle">Boundary</text>
+                <text x="500" y="180" font-family="Inter" font-size="20" fill="#1F2937" text-anchor="middle">Penalty Boundary</text>
+                <text x="630" y="515" font-family="Inter" font-size="16" fill="#E5E7EB" text-anchor="middle">Referee's Position</text>
+            </svg>
+        </div>
+
+        <!-- Controls -->
+        <div class="w-full mt-8 p-6 bg-gray-800 rounded-lg shadow-lg">
+            <label for="box-size-slider" class="block text-lg font-medium text-gray-200 mb-2">Adjust "The Box" Size</label>
+            <div class="flex items-center space-x-4">
+                <input id="box-size-slider" type="range" min="15" max="29.54" value="29.54" step="0.01" class="w-full">
+                <span id="box-size-label" class="text-xl font-semibold text-amber-400 w-24 text-center">29' 6"</span>
+            </div>
+            <div class="text-center mt-6">
+                <button id="generate-report-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-300">
+                    Generate Diagnostics
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diagnostics Modal -->
+    <div id="modal" class="modal fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 opacity-0 pointer-events-none">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl text-gray-200">
+            <h3 class="text-xl font-bold mb-4">Diagnostics Report</h3>
+            <textarea id="report-content" readonly class="w-full h-64 bg-gray-900 text-gray-300 font-mono text-sm p-3 rounded-md border border-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button id="copy-report-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Copy to Clipboard</button>
+                <button id="close-modal-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- DOM ELEMENTS ---
+        const box = document.getElementById('the-box');
+        const boxDimLine = document.getElementById('box-dim-line');
+        const boxDimText = document.getElementById('box-dim-text');
+        const slider = document.getElementById('box-size-slider');
+        const sizeLabel = document.getElementById('box-size-label');
+        
+        const modal = document.getElementById('modal');
+        const generateReportBtn = document.getElementById('generate-report-btn');
+        const closeReportBtn = document.getElementById('close-modal-btn');
+        const copyReportBtn = document.getElementById('copy-report-btn');
+        const reportContent = document.getElementById('report-content');
+
+        // --- STATE & CONSTANTS ---
+        const stateLog = [`[${new Date().toISOString()}] App Initialized.`];
+        const SVG_VIEWBOX_SIZE = 1000;
+        const COMPETITION_CIRCLE_DIAMETER_FT = 29.54; // 29' 6.5"
+
+        // --- FUNCTIONS ---
+
+        /**
+         * Converts feet to SVG units based on the competition circle size.
+         * @param {number} feet - The measurement in feet.
+         * @returns {number} The corresponding size in SVG units.
+         */
+        function feetToSvg(feet) {
+            const competitionCircleSvgRadius = 348;
+            const competitionCircleFtRadius = COMPETITION_CIRCLE_DIAMETER_FT / 2;
+            return (feet / competitionCircleFtRadius) * competitionCircleSvgRadius;
+        }
+
+        /**
+         * Updates the SVG diagram based on the current box size.
+         * @param {number} boxSizeFt - The desired size of the box in feet.
+         */
+        function updateMat(boxSizeFt) {
+            const boxSizeSvg = feetToSvg(boxSizeFt);
+            const offset = (SVG_VIEWBOX_SIZE - boxSizeSvg) / 2;
+
+            // Update the box element
+            box.setAttribute('width', boxSizeSvg);
+            box.setAttribute('height', boxSizeSvg);
+            box.setAttribute('x', offset);
+            box.setAttribute('y', offset);
+
+            // Update the dimension line and text
+            boxDimLine.setAttribute('x1', offset);
+            boxDimLine.setAttribute('x2', offset + boxSizeSvg);
+            boxDimText.textContent = `The Box: ${formatFeetInches(boxSizeFt)}`;
+            
+            // Update the label next to the slider
+            sizeLabel.textContent = formatFeetInches(boxSizeFt);
+        }
+
+        /**
+         * Formats a decimal foot value into feet and inches.
+         * @param {number} feetDecimal - The value in feet (e.g., 23.5).
+         * @returns {string} A formatted string (e.g., "23' 6\"").
+         */
+        function formatFeetInches(feetDecimal) {
+            const feet = Math.floor(feetDecimal);
+            const inches = Math.round((feetDecimal - feet) * 12);
+            return `${feet}' ${inches}"`;
+        }
+
+        /**
+         * Generates and displays the diagnostics report.
+         */
+        function generateReport() {
+            const report = `
+--- TW MAT DIAGNOSTICS ---
+Timestamp: ${new Date().toISOString()}
+User Agent: ${navigator.userAgent}
+Viewport: ${window.innerWidth}px x ${window.innerHeight}px
+
+--- CURRENT SETTINGS ---
+Competition Circle Diameter: 29' 6.5"
+The Box Size: ${formatFeetInches(slider.value)} (${slider.value} ft)
+
+--- STATE LOG ---
+${stateLog.join('\n')}
+`;
+            reportContent.value = report.trim();
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        /**
+         * Copies the report content to the clipboard.
+         */
+        function copyReport() {
+            reportContent.select();
+            // Using document.execCommand as a fallback for iframe compatibility
+            try {
+                document.execCommand('copy');
+                copyReportBtn.textContent = 'Copied!';
+                setTimeout(() => { copyReportBtn.textContent = 'Copy to Clipboard'; }, 2000);
+            } catch (err) {
+                console.error('Failed to copy report:', err);
+                copyReportBtn.textContent = 'Error!';
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+
+        // Update the mat when the slider is moved
+        slider.addEventListener('input', (e) => {
+            const newSize = parseFloat(e.target.value);
+            updateMat(newSize);
+        });
+        
+        // Log the final change when the user lets go of the slider
+        slider.addEventListener('change', (e) => {
+             stateLog.push(`[${new Date().toISOString()}] Box size changed to ${formatFeetInches(e.target.value)}.`);
+        });
+
+        // Modal controls
+        generateReportBtn.addEventListener('click', generateReport);
+        closeReportBtn.addEventListener('click', () => {
+            modal.classList.add('opacity-0', 'pointer-events-none');
+        });
+        copyReportBtn.addEventListener('click', copyReport);
+
+        // --- INITIALIZATION ---
+        // Initial draw on page load
+        updateMat(parseFloat(slider.value));
+
+    </script>
+</body>
+</html>
