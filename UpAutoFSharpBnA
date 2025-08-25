@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Image Upscale</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- JSZip library to handle zip files in the browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Updated FileSaver.js library to save files to the local filesystem -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .file-input-button {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+        }
+        .drag-over {
+            border-color: #4f46e5; /* Indigo */
+            background-color: #3730a3; /* Darker Indigo */
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #2d3748; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+        .preview-canvas { border: 2px dashed #4a5568; border-radius: 0.5rem; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7); }
+            50% { box-shadow: 0 0 20px 10px rgba(79, 70, 229, 0); }
+        }
+        .pulse-animate { animation: pulse-glow 3s infinite; }
+        .rotate-icon { transition: transform 0.3s ease-in-out; }
+        .slider-wrapper { position: relative; display: flex; align-items: center; }
+        .slider-wrapper::before {
+            content: ''; position: absolute; left: 50%; top: 50%;
+            transform: translate(-50%, -50%); width: 2px; height: 12px;
+            background-color: #ef4444; z-index: 1;
+        }
+        .slider-input { position: relative; z-index: 2; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { background: #4b5563; }
+        input[type=range]::-moz-range-track { background: #4b5563; }
+        .comparison-modal { backdrop-filter: blur(5px); }
+        .btn-compare-active {
+            background-color: #4f46e5 !important;
+            color: white !important;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-6xl bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
+        <!-- Header Section -->
+        <div class="text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Free Image Upscale</h1>
+            <p class="text-gray-400 mt-2">Enlarge, edit, and compare your JPG & PNG images.</p>
+        </div>
+
+        <!-- Controls Section -->
+        <div class="bg-gray-700/50 p-6 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-6 items-start">
+            <div class="space-y-2">
+                <label class="text-lg font-semibold text-white">1. Add SPID (Optional)</label>
+                <input type="text" id="spid-input" maxlength="17" placeholder="SPID" class="w-full bg-gray-800 border border-gray-600 text-white rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition">
+                <label class="text-lg font-semibold text-white mt-4 block">2. Upload Images</label>
+                <input type="file" id="image-files-input" multiple accept=".png, .jpg, .jpeg" class="hidden">
+                <label for="image-files-input" id="drop-zone" class="file-input-button w-full text-center px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex flex-col items-center justify-center border-2 border-dashed border-transparent h-28 pulse-animate">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mb-2 text-indigo-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h10a4 4 0 014 4v5a4 4 0 01-4 4H7z"></path><path stroke-linecap="round" stroke-linejoin="round" d="M16 16v-4a4 4 0 00-4-4H8a4 4 0 00-4 4v4"></path></svg>
+                    <span>Select Images or Drag & Drop</span>
+                </label>
+                <p id="file-selection-text" class="text-gray-400 text-sm text-center">No images selected.</p>
+            </div>
+            <div class="space-y-2">
+                <label class="text-lg font-semibold text-white">3. Choose Scale Factor</label>
+                <div id="scale-factor" class="flex justify-center bg-gray-800 rounded-lg p-1">
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="2x"><input type="radio" name="scale" value="2" id="2x" class="sr-only" checked>2x</label>
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="4x"><input type="radio" name="scale" value="4" id="4x" class="sr-only">4x</label>
+                    <label class="flex-1 text-center cursor-pointer py-2 rounded-md transition-colors" for="8x"><input type="radio" name="scale" value="8" id="8x" class="sr-only">8x</label>
+                </div>
+            </div>
+            <div class="space-y-2 col-span-1 md:col-span-2">
+                 <label class="text-lg font-semibold text-white">4. Process Images</label>
+                 <div class="grid grid-cols-2 gap-4">
+                    <button id="upscale-btn" class="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-300 font-bold text-lg disabled:bg-gray-500 disabled:cursor-not-allowed">Upscale</button>
+                    <button id="clear-btn" class="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-300 font-bold text-lg">Clear</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="loading-spinner" class="hidden text-center py-4">
+            <svg class="animate-spin h-8 w-8 text-indigo-400 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <p class="mt-2 text-lg font-semibold">Upscaling... Please wait.</p>
+        </div>
+        
+        <div id="results-header" class="hidden justify-between items-center mt-4">
+            <h2 class="text-2xl font-bold">Upscaled Previews & Editors</h2>
+            <button id="download-all-btn" class="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors duration-300 font-semibold flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                Download All as Zip
+            </button>
+        </div>
+        <div id="results-container" class="bg-gray-900/70 p-4 rounded-xl min-h-[200px] max-h-[60vh] overflow-y-auto space-y-4">
+            <p id="results-placeholder" class="text-gray-500 text-center py-10">Your upscaled images will appear here.</p>
+        </div>
+
+        <div id="feedback-section" class="hidden bg-gray-700/50 p-6 rounded-xl mt-6 space-y-4 text-center">
+            <h2 class="text-2xl font-bold">Feedback & Support</h2>
+            <p class="text-gray-300">Encounter an issue or have feedback? Please email <strong class="text-indigo-300">Brian.Shirley@Angi.com</strong>.</p>
+            <button id="copy-diagnostics-btn" class="w-full sm:w-auto mx-auto px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-300 font-bold">Copy Diagnostic Info</button>
+        </div>
+    </div>
+
+    <!-- Comparison Modal -->
+    <div id="comparison-modal" class="comparison-modal hidden fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-5xl max-h-full overflow-y-auto">
+            <h2 class="text-2xl font-bold text-center mb-4">Image Comparison</h2>
+            <div id="comparison-canvas-container" class="bg-gray-900 p-4 rounded-lg">
+                <!-- Comparison canvas will be inserted here -->
+            </div>
+            <div class="mt-6 flex justify-center gap-4">
+                <button id="download-comparison-btn" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold">Download Comparison</button>
+                <button id="close-modal-btn" class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const imageInput = document.getElementById('image-files-input'), spidInput = document.getElementById('spid-input'),
+              fileSelectionText = document.getElementById('file-selection-text'), upscaleBtn = document.getElementById('upscale-btn'),
+              clearBtn = document.getElementById('clear-btn'), scaleFactorContainer = document.getElementById('scale-factor'),
+              loadingSpinner = document.getElementById('loading-spinner'), resultsContainer = document.getElementById('results-container'),
+              resultsHeader = document.getElementById('results-header'), downloadAllBtn = document.getElementById('download-all-btn'),
+              resultsPlaceholder = document.getElementById('results-placeholder'), dropZone = document.getElementById('drop-zone'),
+              feedbackSection = document.getElementById('feedback-section'), copyDiagnosticsBtn = document.getElementById('copy-diagnostics-btn'),
+              comparisonModal = document.getElementById('comparison-modal'),
+              comparisonCanvasContainer = document.getElementById('comparison-canvas-container'), closeModalBtn = document.getElementById('close-modal-btn'),
+              downloadComparisonBtn = document.getElementById('download-comparison-btn');
+
+        // --- Global State ---
+        const upscaledCanvases = new Map();
+        let diagnostics = {}, intersectionObserver, beforeImageId = null, afterImageId = null, comparisonBlob = null;
+
+        // --- Initialization ---
+        window.addEventListener('load', () => { initializeDiagnostics(); diagnostics.mousePath.push({ event: 'pageLoad', timestamp: Date.now() }); });
+        
+        function initializeDiagnostics() {
+            diagnostics = { sessionId: crypto.randomUUID(), pageLoadTimestamp: new Date().toISOString(), sessionDuration: null, browserInfo: navigator.userAgent, screenResolution: `${window.screen.width}x${window.screen.height}`, timeToFirstUpload: null, uploadMethod: null, timeFromUploadToProcess: null, scaleChanges: 0, mostUsedScaleFactor: null, individualDownloads: 0, downloadAllClicked: false, scrollDepth: 0, timeSpentOnPreviews: null, sessionAbandoned: true, mousePath: [], totalProcessingTime: null, totalUpscaledOutputSize: 0, processingErrors: [], imageReports: [], editActions: [] };
+        }
+
+        // --- Event Listeners ---
+        window.addEventListener('beforeunload', () => {
+            if (diagnostics.pageLoadTimestamp) diagnostics.sessionDuration = `${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds`;
+            if (diagnostics.timeSpentOnPreviewsStart) diagnostics.timeSpentOnPreviews = `${(Date.now() - diagnostics.timeSpentOnPreviewsStart) / 1000} seconds`;
+        });
+        imageInput.addEventListener('change', () => {
+            if (!diagnostics.timeToFirstUpload) {
+                diagnostics.timeToFirstUpload = `${(Date.now() - new Date(diagnostics.pageLoadTimestamp).getTime()) / 1000} seconds`;
+                diagnostics.timeFromUploadToProcess = Date.now();
+            }
+            if (!diagnostics.uploadMethod) diagnostics.uploadMethod = 'ButtonClick';
+            updateFileSelectionUI(imageInput.files);
+        });
+        scaleFactorContainer.addEventListener('change', (e) => {
+            if (e.target.type === 'radio') {
+                diagnostics.scaleChanges++;
+                diagnostics.mousePath.push({ event: 'scaleChange', value: e.target.value, timestamp: Date.now() });
+                document.querySelectorAll('#scale-factor label').forEach(label => { label.style.backgroundColor = ''; label.style.color = ''; });
+                e.target.parentElement.style.backgroundColor = '#4f46e5'; e.target.parentElement.style.color = 'white';
+            }
+        });
+        document.querySelector('#scale-factor input:checked').parentElement.style.backgroundColor = '#4f46e5';
+        document.querySelector('#scale-factor input:checked').parentElement.style.color = 'white';
+        upscaleBtn.addEventListener('click', handleUpscaleProcess);
+        clearBtn.addEventListener('click', handleClear);
+        downloadAllBtn.addEventListener('click', (e) => { diagnostics.downloadAllClicked = true; diagnostics.mousePath.push({ event: 'downloadAll', x: e.clientX, y: e.clientY, timestamp: Date.now() }); downloadAllAsZip(); });
+        resultsContainer.addEventListener('scroll', () => {
+            const { scrollTop, scrollHeight, clientHeight } = resultsContainer;
+            const currentDepth = Math.round(((scrollTop + clientHeight) / scrollHeight) * 100);
+            if (currentDepth > diagnostics.scrollDepth) diagnostics.scrollDepth = currentDepth;
+        });
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => { dropZone.addEventListener(eventName, preventDefaults, false); document.body.addEventListener(eventName, preventDefaults, false); });
+        ['dragenter', 'dragover'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.add('drag-over'), false));
+        ['dragleave', 'drop'].forEach(eventName => dropZone.addEventListener(eventName, () => dropZone.classList.remove('drag-over'), false));
+        dropZone.addEventListener('drop', handleDrop, false);
+        closeModalBtn.addEventListener('click', () => {
+            comparisonModal.classList.add('hidden');
+            resetComparisonSelection();
+        });
+        downloadComparisonBtn.addEventListener('click', downloadComparisonImage);
+
+        // --- Core Functions ---
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+        function handleDrop(e) {
+            diagnostics.uploadMethod = 'DragAndDrop';
+            diagnostics.mousePath.push({ event: 'drop', x: e.clientX, y: e.clientY, timestamp: Date.now() });
+            const files = e.dataTransfer.files;
+            const dataTransfer = new DataTransfer();
+            Array.from(files).filter(file => file.type.startsWith('image/')).forEach(file => dataTransfer.items.add(file));
+            imageInput.files = dataTransfer.files;
+            imageInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function updateFileSelectionUI(files) {
+            const count = files.length;
+            fileSelectionText.textContent = count > 0 ? `${count} image(s) selected.` : 'No images selected.';
+            fileSelectionText.classList.toggle('text-green-400', count > 0);
+        }
+
+        function handleClear() {
+            imageInput.value = null;
+            updateFileSelectionUI(imageInput.files);
+            resultsContainer.innerHTML = '';
+            resultsPlaceholder.classList.remove('hidden');
+            resultsHeader.classList.add('hidden');
+            feedbackSection.classList.add('hidden');
+            spidInput.value = '';
+            upscaledCanvases.clear();
+            resetComparisonSelection();
+            initializeDiagnostics();
+            diagnostics.mousePath.push({ event: 'clear', timestamp: Date.now() });
+        }
+
+        async function handleUpscaleProcess() {
+            const files = imageInput.files;
+            if (files.length === 0) {
+                fileSelectionText.style.color = '#f87171'; fileSelectionText.style.fontWeight = 'bold';
+                fileSelectionText.textContent = 'Please select at least one image file.';
+                setTimeout(() => { fileSelectionText.style.color = ''; fileSelectionText.style.fontWeight = ''; updateFileSelectionUI(imageInput.files); }, 3000);
+                return;
+            }
+            diagnostics.sessionAbandoned = false;
+            diagnostics.mostUsedScaleFactor = `${document.querySelector('input[name="scale"]:checked').value}x`;
+            if (diagnostics.timeFromUploadToProcess && typeof diagnostics.timeFromUploadToProcess === 'number') {
+                diagnostics.timeFromUploadToProcess = `${(Date.now() - diagnostics.timeFromUploadToProcess) / 1000} seconds`;
+            }
+            diagnostics.mousePath.push({ event: 'upscaleClick', timestamp: Date.now() });
+            upscaleBtn.disabled = true; upscaleBtn.textContent = 'Processing...';
+            loadingSpinner.classList.remove('hidden');
+            resultsContainer.innerHTML = ''; resultsHeader.classList.add('hidden');
+            feedbackSection.classList.add('hidden'); resultsPlaceholder.classList.add('hidden');
+            upscaledCanvases.clear(); resetComparisonSelection();
+            
+            diagnostics.imageReports = []; diagnostics.processingErrors = []; diagnostics.totalUpscaledOutputSize = 0;
+
+            const placeholders = Array.from(files).map((file, index) => {
+                const placeholder = document.createElement('div');
+                placeholder.id = `card-${index}`;
+                placeholder.className = 'bg-gray-800 p-4 rounded-lg min-h-[200px] flex items-center justify-center';
+                placeholder.innerHTML = `<p class="text-gray-500">Loading ${file.name}...</p>`;
+                resultsContainer.appendChild(placeholder);
+                return { file, index, placeholder };
+            });
+
+            if (intersectionObserver) intersectionObserver.disconnect();
+            intersectionObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const placeholder = entry.target;
+                        const fileData = placeholders.find(p => p.placeholder === placeholder);
+                        if (fileData && !fileData.processed) {
+                            fileData.processed = true;
+                            const scaleFactor = parseInt(document.querySelector('input[name="scale"]:checked').value);
+                            const spid = spidInput.value.trim();
+                            createImagePreview(fileData.file, scaleFactor, spid, fileData.index)
+                                .then(result => {
+                                    if (result) {
+                                        placeholder.replaceWith(result.previewElement);
+                                        diagnostics.imageReports[result.report.index] = result.report;
+                                    }
+                                }).catch(handleProcessingError(fileData.file, placeholder));
+                        }
+                    }
+                });
+            }, { root: resultsContainer, rootMargin: '200px' });
+
+            placeholders.forEach(p => intersectionObserver.observe(p.placeholder));
+
+            upscaleBtn.disabled = false; upscaleBtn.textContent = 'Upscale';
+            loadingSpinner.classList.add('hidden');
+            if (files.length > 0) {
+                resultsHeader.classList.remove('hidden'); resultsHeader.classList.add('flex');
+                feedbackSection.classList.remove('hidden');
+                diagnostics.timeSpentOnPreviewsStart = Date.now();
+            }
+        }
+        
+        function handleProcessingError(file, placeholder) {
+            return (error) => {
+                console.error('Error processing file:', file.name, error);
+                diagnostics.processingErrors.push(file.name);
+                const errorCard = document.createElement('div');
+                errorCard.className = 'bg-red-900/50 p-4 rounded-lg text-center';
+                errorCard.innerHTML = `<p class="font-bold text-red-300">Failed to process:</p><p class="text-sm truncate">${file.name}</p><p class="text-xs text-red-400 mt-1">File may be corrupted.</p>`;
+                placeholder.replaceWith(errorCard);
+            };
+        }
+
+        function createImagePreview(file, scaleFactor, spid, index) {
+            return new Promise((resolve, reject) => {
+                const individualStartTime = Date.now();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let originalWidth = img.width, originalHeight = img.height;
+                        let newWidth = originalWidth * scaleFactor, newHeight = originalHeight * scaleFactor;
+                        const MAX_DIMENSION = 8000;
+                        if (newWidth > MAX_DIMENSION || newHeight > MAX_DIMENSION) {
+                            const ratio = Math.min(MAX_DIMENSION / newWidth, MAX_DIMENSION / newHeight);
+                            newWidth = Math.floor(newWidth * ratio); newHeight = Math.floor(newHeight * ratio);
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = newWidth; canvas.height = newHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+                        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                        const cardId = `card-${index}`;
+                        upscaledCanvases.set(cardId, { originalImage: img, canvas: canvas, rotation: 0, brightness: 0, sharpness: 0, fileName: file.name, fileType: file.type });
+                        const previewContainer = document.createElement('div');
+                        previewContainer.className = 'bg-gray-800 p-4 rounded-lg transition-shadow';
+                        previewContainer.id = cardId;
+                        previewContainer.innerHTML = `
+                            <div class="relative grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                <button class="rotate-btn absolute top-2 right-2 z-10 p-2 bg-gray-900/50 rounded-full hover:bg-gray-700/70 transition-colors flex items-center space-x-1"><svg class="rotate-icon w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M18 6 L18 18 L6 18"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 14 L6 18 L10 22"></path></svg><span class="text-xs font-semibold text-white">90°</span></button>
+                                <div class="text-center"><h3 class="font-bold text-lg mb-2">Original</h3><img src="${img.src}" class="max-w-full h-auto mx-auto rounded-md"><p class="text-sm text-gray-400 mt-2">${originalWidth} x ${originalHeight}px</p></div>
+                                <div class="text-center upscaled-container"><h3 class="font-bold text-lg mb-2">Upscaled (${scaleFactor}x)</h3></div>
+                            </div>
+                            <div class="mt-4 pt-4 border-t border-gray-700 space-y-4">
+                                <div><label class="text-sm font-semibold text-gray-300">Brightness</label><div class="flex items-center gap-2"><span class="text-xs">Darker</span><div class="slider-wrapper w-full"><input type="range" min="-100" max="100" value="0" class="slider-input brightness-slider w-full"></div><span class="text-xs">Lighter</span></div></div>
+                                <div><label class="text-sm font-semibold text-gray-300">Sharpen</label><div class="flex items-center gap-2"><span class="text-xs">Softer</span><div class="slider-wrapper w-full"><input type="range" min="-100" max="100" value="0" class="slider-input sharpen-slider w-full"></div><span class="text-xs">Sharper</span></div></div>
+                                <div class="text-center"><button class="reset-btn mt-1 px-4 py-1 bg-red-600 text-white text-xs font-bold rounded-full hover:bg-red-700 transition-colors">Reset Edits</button></div>
+                            </div>
+                            <div class="mt-4 flex justify-end items-center gap-2">
+                                <button class="before-btn px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 font-semibold transition-colors">Set Before</button>
+                                <button class="after-btn px-3 py-1.5 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700 font-semibold transition-colors">Set After</button>
+                                <button class="download-btn px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-semibold">Download</button>
+                            </div>`;
+                        const upscaledContainer = previewContainer.querySelector('.upscaled-container');
+                        upscaledContainer.appendChild(canvas);
+                        canvas.className = 'max-w-full h-auto mx-auto rounded-md preview-canvas';
+                        
+                        const rotateBtnIcon = previewContainer.querySelector('.rotate-icon');
+                        previewContainer.querySelector('.rotate-btn').addEventListener('click', () => {
+                            const state = upscaledCanvases.get(cardId); state.rotation = (state.rotation + 90) % 360;
+                            diagnostics.editActions.push({ file: state.fileName, action: 'rotate', value: state.rotation, timestamp: Date.now() });
+                            rotateBtnIcon.style.transform = `rotate(${state.rotation}deg)`; redrawCanvas(cardId);
+                        });
+                        
+                        const brightnessSlider = previewContainer.querySelector('.brightness-slider'), sharpenSlider = previewContainer.querySelector('.sharpen-slider');
+                        let debounceTimer;
+                        const handleSliderInput = (e, property) => {
+                            clearTimeout(debounceTimer);
+                            debounceTimer = setTimeout(() => {
+                                const state = upscaledCanvases.get(cardId); state[property] = parseInt(e.target.value);
+                                diagnostics.editActions.push({ file: state.fileName, action: property, value: state[property], timestamp: Date.now() });
+                                redrawCanvas(cardId);
+                            }, 50);
+                        };
+                        brightnessSlider.addEventListener('input', (e) => handleSliderInput(e, 'brightness'));
+                        sharpenSlider.addEventListener('input', (e) => handleSliderInput(e, 'sharpness'));
+                        
+                        previewContainer.querySelector('.reset-btn').addEventListener('click', () => {
+                            const state = upscaledCanvases.get(cardId); state.brightness = 0; state.sharpness = 0;
+                            brightnessSlider.value = 0; sharpenSlider.value = 0;
+                            diagnostics.editActions.push({ file: state.fileName, action: 'resetEdits', timestamp: Date.now() });
+                            redrawCanvas(cardId);
+                        });
+                        
+                        previewContainer.querySelector('.download-btn').addEventListener('click', () => {
+                            diagnostics.individualDownloads++; const state = upscaledCanvases.get(cardId);
+                            const finalFileName = `${spid ? spid + '_' : ''}upscaled_${scaleFactor}x_${state.fileName}`;
+                            state.canvas.toBlob(blob => {
+                                const report = diagnostics.imageReports[index];
+                                if (report) { report.upscaledSize = `${(blob.size / 1024).toFixed(2)} KB`; report.rawUpscaledSize = blob.size; }
+                                saveAs(blob, finalFileName);
+                            }, state.fileType);
+                        });
+
+                        previewContainer.querySelector('.before-btn').addEventListener('click', () => { handleBeforeClick(cardId); });
+                        previewContainer.querySelector('.after-btn').addEventListener('click', () => { handleAfterClick(cardId); });
+                        
+                        const report = { index: index, fileName: file.name, fileType: file.type, originalDimensions: `${originalWidth}x${originalHeight}`, upscaledDimensions: `${newWidth}x${newHeight}`, aspectRatio: (originalWidth / originalHeight).toFixed(2), originalSize: `${(file.size / 1024).toFixed(2)} KB`, upscaledSize: 'N/A', rawUpscaledSize: 0, totalPixelsProcessed: newWidth * newHeight, processingTime: `${Date.now() - individualStartTime} ms` };
+                        resolve({ previewElement: previewContainer, report: report });
+                    };
+                    img.onerror = reject; img.src = e.target.result;
+                };
+                reader.onerror = reject; reader.readAsDataURL(file);
+            });
+        }
+
+        function redrawCanvas(cardId) {
+            const state = upscaledCanvases.get(cardId); if (!state) return;
+            const { originalImage, canvas, rotation, brightness, sharpness } = state;
+            const ctx = canvas.getContext('2d');
+            const effectiveScaleFactor = (rotation === 0 || rotation === 180) ? canvas.width / originalImage.width : canvas.width / originalImage.height;
+            const newWidth = (rotation === 90 || rotation === 270) ? originalImage.height * effectiveScaleFactor : originalImage.width * effectiveScaleFactor;
+            const newHeight = (rotation === 90 || rotation === 270) ? originalImage.width * effectiveScaleFactor : originalImage.height * effectiveScaleFactor;
+            canvas.width = newWidth; canvas.height = newHeight;
+            const brightnessValue = 100 + (brightness / 2), contrastValue = 100 + (sharpness / 5);
+            ctx.filter = `brightness(${brightnessValue}%) contrast(${contrastValue}%)`;
+            ctx.save();
+            ctx.translate(newWidth / 2, newHeight / 2);
+            ctx.rotate(rotation * Math.PI / 180);
+            ctx.drawImage(originalImage, -originalImage.width * effectiveScaleFactor / 2, -originalImage.height * effectiveScaleFactor / 2, originalImage.width * effectiveScaleFactor, originalImage.height * effectiveScaleFactor);
+            ctx.restore();
+        }
+
+        function handleBeforeClick(cardId) {
+            if (afterImageId === cardId) afterImageId = null;
+            beforeImageId = cardId;
+            updateComparisonSelectionUI();
+            triggerComparisonCheck();
+        }
+
+        function handleAfterClick(cardId) {
+            if (beforeImageId === cardId) beforeImageId = null;
+            afterImageId = cardId;
+            updateComparisonSelectionUI();
+            triggerComparisonCheck();
+        }
+
+        function updateComparisonSelectionUI() {
+            document.querySelectorAll('.bg-gray-800[id^="card-"]').forEach(card => {
+                const beforeBtn = card.querySelector('.before-btn');
+                const afterBtn = card.querySelector('.after-btn');
+                
+                if (beforeBtn && afterBtn) {
+                    beforeBtn.classList.remove('btn-compare-active');
+                    afterBtn.classList.remove('btn-compare-active');
+                    card.style.boxShadow = '';
+
+                    if (card.id === beforeImageId) {
+                        beforeBtn.classList.add('btn-compare-active');
+                        card.style.boxShadow = '0 0 0 3px #6d28d9'; // purple
+                    }
+                    if (card.id === afterImageId) {
+                        afterBtn.classList.add('btn-compare-active');
+                        card.style.boxShadow = '0 0 0 3px #0d9488'; // teal
+                    }
+                }
+            });
+        }
+        
+        function triggerComparisonCheck() {
+            if (beforeImageId && afterImageId) {
+                generateComparison();
+            }
+        }
+
+        function resetComparisonSelection() {
+            beforeImageId = null;
+            afterImageId = null;
+            comparisonBlob = null;
+            updateComparisonSelectionUI();
+        }
+
+        function generateComparison() {
+            if (!beforeImageId || !afterImageId) return;
+            comparisonBlob = null; // Reset previous blob
+            const state1 = upscaledCanvases.get(beforeImageId), state2 = upscaledCanvases.get(afterImageId);
+            const canvas1 = state1.canvas, canvas2 = state2.canvas;
+            
+            const targetHeight = Math.min(canvas1.height, canvas2.height);
+            const newWidth1 = canvas1.width * (targetHeight / canvas1.height);
+            const newWidth2 = canvas2.width * (targetHeight / canvas2.height);
+
+            const totalWidth = newWidth1 + newWidth2 + 40;
+            const comparisonCanvas = document.createElement('canvas');
+            comparisonCanvas.width = totalWidth; comparisonCanvas.height = targetHeight + 80;
+            const ctx = comparisonCanvas.getContext('2d');
+            ctx.fillStyle = '#1f2937'; ctx.fillRect(0, 0, totalWidth, comparisonCanvas.height);
+            ctx.font = 'bold 24px Inter, sans-serif'; ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+            
+            ctx.fillText('Before', newWidth1 / 2, 35);
+            ctx.drawImage(canvas1, 0, 60, newWidth1, targetHeight);
+            
+            ctx.fillText('After', newWidth1 + 20 + (newWidth2 / 2), 35);
+            ctx.drawImage(canvas2, newWidth1 + 40, 60, newWidth2, targetHeight);
+            
+            comparisonCanvasContainer.innerHTML = '';
+            comparisonCanvas.className = 'max-w-full h-auto mx-auto rounded-md';
+            comparisonCanvasContainer.appendChild(comparisonCanvas);
+            
+            const MAX_SIZE_MB = 10;
+            const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
+            let quality = 0.95; 
+
+            const checkAndSetBlob = () => {
+                comparisonCanvas.toBlob(blob => {
+                    if (blob.size > MAX_SIZE_BYTES && quality > 0.1) {
+                        quality -= 0.05;
+                        checkAndSetBlob();
+                    } else {
+                        comparisonBlob = blob;
+                        comparisonModal.classList.remove('hidden');
+                    }
+                }, 'image/jpeg', quality);
+            };
+            
+            checkAndSetBlob();
+        }
+
+        function downloadComparisonImage() {
+            if (comparisonBlob) {
+                saveAs(comparisonBlob, 'image_comparison.jpeg');
+                comparisonModal.classList.add('hidden');
+                resetComparisonSelection();
+            }
+        }
+
+        async function downloadAllAsZip() {
+            if (upscaledCanvases.size === 0) return;
+            const spid = spidInput.value.trim();
+            const zip = new JSZip();
+            for (const [cardId, state] of upscaledCanvases.entries()) {
+                const scaleFactor = (state.rotation === 0 || state.rotation === 180) ? state.canvas.width / state.originalImage.width : state.canvas.width / state.originalImage.height;
+                const finalFileName = `${spid ? spid + '_' : ''}upscaled_${scaleFactor.toFixed(0)}x_${state.fileName}`;
+                const blob = await new Promise(resolve => state.canvas.toBlob(resolve, state.fileType));
+                const report = diagnostics.imageReports.find(r => r && r.fileName === state.fileName);
+                if (report) { report.upscaledSize = `${(blob.size / 1024).toFixed(2)} KB`; report.rawUpscaledSize = blob.size; }
+                zip.file(finalFileName, blob);
+            }
+            downloadAllBtn.disabled = true; downloadAllBtn.innerHTML = 'Zipping...';
+            try {
+                const content = await zip.generateAsync({ type: 'blob' });
+                saveAs(content, 'upscaled_images.zip');
+            } catch (error) { console.error("Error creating zip file:", error); }
+            finally { downloadAllBtn.disabled = false; downloadAllBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Download All as Zip`; }
+        }
+
+        copyDiagnosticsBtn.addEventListener('click', () => {
+            if (diagnostics.timeSpentOnPreviewsStart) diagnostics.timeSpentOnPreviews = `${(Date.now() - diagnostics.timeSpentOnPreviewsStart) / 1000} seconds`;
+            
+            const validReports = diagnostics.imageReports.filter(Boolean);
+            diagnostics.totalProcessingTime = `${(validReports.reduce((acc, report) => acc + (parseInt(report.processingTime) || 0), 0) / 1000).toFixed(3)} seconds`;
+            diagnostics.totalUpscaledOutputSize = `${(validReports.reduce((acc, report) => acc + (report.rawUpscaledSize || 0), 0) / 1024).toFixed(2)} KB`;
+
+            let reportString = `--- DIAGNOSTIC REPORT ---\n\n`;
+            
+            reportString += `## SESSION METRICS\n`;
+            ['sessionId', 'pageLoadTimestamp', 'sessionDuration', 'browserInfo', 'screenResolution'].forEach(key => reportString += `${key}: ${diagnostics[key]}\n`);
+            
+            reportString += `\n## USER INTERACTION METRICS\n`;
+            ['timeToFirstUpload', 'uploadMethod', 'timeFromUploadToProcess', 'scaleChanges', 'mostUsedScaleFactor', 'individualDownloads', 'downloadAllClicked', 'scrollDepth', 'timeSpentOnPreviews', 'sessionAbandoned'].forEach(key => reportString += `${key}: ${diagnostics[key]}\n`);
+
+            reportString += `\n## OVERALL PROCESSING METRICS\n`;
+            ['totalProcessingTime', 'totalUpscaledOutputSize', 'processingErrors'].forEach(key => reportString += `${key}: ${Array.isArray(diagnostics[key]) ? diagnostics[key].join(', ') || 'None' : diagnostics[key]}\n`);
+
+            reportString += `\n## INDIVIDUAL IMAGE REPORTS (${validReports.length})\n`;
+            validReports.forEach((report, index) => {
+                reportString += `----------------------------------------\nIMAGE ${index + 1}:\n` + Object.entries(report).filter(([k]) => k !== 'index').map(([k, v]) => `  ${k}: ${v}`).join('\n') + '\n';
+            });
+            
+            const tempTextarea = document.createElement('textarea');
+            tempTextarea.value = reportString; document.body.appendChild(tempTextarea);
+            tempTextarea.select(); document.execCommand('copy'); document.body.removeChild(tempTextarea);
+            copyDiagnosticsBtn.textContent = 'Copied!';
+            setTimeout(() => { copyDiagnosticsBtn.textContent = 'Copy Diagnostic Info'; }, 2000);
+        });
+    </script>
+</body>
+</html>
