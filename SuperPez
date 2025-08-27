@@ -9,7 +9,7 @@
  * 4.  Self-Installing Priority Flags: A daily trigger is automatically created to flag SPs needing a welcome call. No manual setup required.
  * 5.  Data Cleanup: Automatically trims whitespace and standardizes cell formatting on every edit.
  * 6.  WC Timestamps: Automatically adds/removes a 'Welcome Call Date' in Column N when status changes.
- * 7.  Automated Follow-Up Dates: Automatically sets a 7-day and 22-day follow-up date in Column J based on WC completion.
+ * 7.  Automated Follow-Up Dates: Automatically sets follow-up dates that are guaranteed to be within the 28-day pipeline.
  */
 
 // --- CONFIGURATION ---
@@ -224,7 +224,7 @@ function updateWelcomeCallTimestamp_(sheet, row, newStatus, oldStatus) {
 }
 
 /**
- * Sets the first follow-up date (7 weekdays from WC) or clears it.
+ * Sets the first follow-up date, ensuring it's within the 28-day pipeline.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object.
  * @param {number} row The row number.
  * @param {string} newStatus The new status.
@@ -233,17 +233,28 @@ function updateWelcomeCallTimestamp_(sheet, row, newStatus, oldStatus) {
 function manageFirstFollowUpDate_(sheet, row, newStatus, oldStatus) {
   const wcDoneStatuses = ["SPP WC done", "PPL WC done", "Nas WC done"];
   const followUpCell = sheet.getRange(row, FOLLOW_UP_COL);
+  const approvalDateCell = sheet.getRange(row, APPROVAL_DATE_COL);
 
   const isNowWcDone = wcDoneStatuses.includes(newStatus);
   const wasPreviouslyWcDone = wcDoneStatuses.includes(oldStatus);
 
   if (isNowWcDone && !wasPreviouslyWcDone) {
-    const followUpDate = getNextWeekday_(new Date(), 7);
-    followUpCell.setValue(followUpDate).setNumberFormat("M/d/yyyy");
+    if (approvalDateCell.isBlank()) return; // Can't set a date without an approval date
+
+    // Calculate the two possible dates
+    const idealFollowUp = getNextWeekday_(new Date(), 7);
+    const deadline = new Date(approvalDateCell.getValue());
+    deadline.setDate(deadline.getDate() + 28);
+
+    // Choose the earlier of the two dates
+    const finalFollowUpDate = idealFollowUp < deadline ? idealFollowUp : deadline;
+
+    followUpCell.setValue(finalFollowUpDate).setNumberFormat("M/d/yyyy");
   } else if (!isNowWcDone && wasPreviouslyWcDone) {
     followUpCell.clearContent();
   }
 }
+
 
 /**
  * Sets the second follow-up date (22 days from approval).
