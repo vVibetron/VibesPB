@@ -5,11 +5,11 @@
  * FEATURES:
  * 1.  Dynamic Row Coloring: Row background and font color change based on status in Column L.
  * 2.  Automatic Row Insertion: A new row is added at the top when data is entered into row 2.
- * 3.  28-Day Countdown: Automatically calculates 'Days Remaining' in Column D based on the 'APPROVAL DATE' in Column C.
- * 4.  Priority Flags: A daily script identifies and flags SPs needing a welcome call.
+ * 3.  28-Day Countdown: Automatically calculates 'Days Remaining' in Column D for any new entry (typed or pasted).
+ * 4.  Self-Installing Priority Flags: A daily trigger is automatically created to flag SPs needing a welcome call. No manual setup required.
  * 5.  Data Cleanup: Automatically trims whitespace and standardizes cell formatting on every edit.
- * 6.  WC Timestamps: Automatically adds/removes a 'Welcome Call Date' in Column N when status changes to/from "WC done".
- * 7.  Quick Follow-Up Log: A custom menu item to quickly add a timestamped note to the selected SP.
+ * 6.  WC Timestamps: Automatically adds/removes a 'Welcome Call Date' in Column N when status changes.
+ * 7.  Automated Follow-Up Dates: Automatically sets a 7-day and 22-day follow-up date in Column J based on WC completion.
  */
 
 // --- CONFIGURATION ---
@@ -18,7 +18,7 @@ const AFFECTED_SHEETS = ["Sheet1"]; // <-- IMPORTANT: Change to your exact sheet
 // Column Assignments (A=1, B=2, etc.)
 const APPROVAL_DATE_COL = 3; // Column C
 const DAYS_REMAINING_COL = 4; // Column D
-const NOTES_COL = 10; // Column J
+const FOLLOW_UP_COL = 10; // Column J
 const STATUS_COL = 12; // Column L
 const PRIORITY_COL = 13; // Column M
 const WC_DATE_COL = 14; // Column N
@@ -29,25 +29,11 @@ const NEW_ROW_DEFAULT_STATUS = "Not called";
 
 /**
  * Runs when the spreadsheet is opened.
- * Sets up custom menus and applies initial formatting to the entire sheet.
+ * This function now also automatically creates the daily trigger for priority flags if it doesn't already exist.
  */
 function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-
-  // Main Menu for new utilities
-  ui.createMenu('Utilities')
-    .addItem('Log Follow-Up Call', 'logFollowUpCall_')
-    .addSeparator()
-    .addItem('Manually Set Priority Flags', 'setPriorityFlags') // Allow manual run
-    .addToUi();
-
-  // Secondary Menu for formatting
-  ui.createMenu('Formatting')
-    .addItem('Apply Formatting to All Cells', 'applySheetWideFormatting_')
-    .addToUi();
-
-  // Apply formatting on open to ensure consistency
-  applySheetWideFormatting_();
+  // This function will create the daily trigger for you automatically.
+  createTimeDrivenTriggers_();
 }
 
 /**
@@ -70,13 +56,15 @@ function onEdit(e) {
     return;
   }
 
-  const editedRow = range.getRow();
-  const editedCol = range.getColumn();
+  const startRow = range.getRow();
+  const endRow = range.getLastRow();
+  const startCol = range.getColumn();
+  const endCol = range.getLastColumn();
 
   // --- Action 1: Universal Formatting & Cleanup on EVERY edit ---
   try {
     range
-      .trimWhitespace() // Remove leading/trailing spaces
+      .trimWhitespace()
       .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP)
       .setVerticalAlignment("middle")
       .setHorizontalAlignment("left");
@@ -84,41 +72,72 @@ function onEdit(e) {
     console.error(`Could not apply universal formatting: ${formatError.message}`);
   }
 
-
   // --- Action 2: Automatic Row Insertion ---
-  // If any cell in the target row is edited and made non-blank, insert a new row.
-  if (editedRow === TARGET_ROW_FOR_INSERTION && range.getDisplayValue().trim() !== "") {
+  if (startRow === TARGET_ROW_FOR_INSERTION && range.getDisplayValue().trim() !== "") {
+    // A check to prevent the script from re-triggering itself on the insert
+    if (e.source.getTriggerUid && e.source.getTriggerUid()) {
+        return;
+    }
     insertNewRow_(sheet);
   }
 
-  // --- Action 3: Conditional Logic based on Edited Column ---
-  switch (editedCol) {
-    case APPROVAL_DATE_COL:
-      // If an approval date is added or changed, update the countdown formula.
-      updateDaysRemaining_(sheet, editedRow);
-      break;
+  // --- Action 3: Conditional Logic ---
 
-    case STATUS_COL:
-      // If the status is changed, apply row coloring AND update the WC timestamp.
-      const statusValue = e.value || "";
-      const oldValue = e.oldValue || "";
-      applyRowFormatting_(sheet.getRange(editedRow, 1, 1, sheet.getMaxColumns()), statusValue);
-      updateWelcomeCallTimestamp_(sheet, editedRow, statusValue, oldValue);
-      break;
+  // A. Handle Countdown Clock (for single or multi-cell edits/pastes)
+  // Checks if the edited range includes the Approval Date column.
+  if (startCol <= APPROVAL_DATE_COL && endCol >= APPROVAL_DATE_COL) {
+    for (let i = startRow; i <= endRow; i++) {
+      updateDaysRemaining_(sheet, i);
+    }
+  }
+
+  // B. Handle Status Change (for single-cell edits)
+  // This logic is kept specific to prevent accidental changes during a bulk paste.
+  if (startCol === STATUS_COL && endCol === STATUS_COL && startRow === endRow) {
+    const statusValue = e.value || "";
+    const oldValue = e.oldValue || "";
+    applyRowFormatting_(sheet.getRange(startRow, 1, 1, sheet.getMaxColumns()), statusValue);
+    updateWelcomeCallTimestamp_(sheet, startRow, statusValue, oldValue);
+    manageFirstFollowUpDate_(sheet, startRow, statusValue, oldValue);
+  }
+
+  // C. Handle Follow-up Date Deletion (for single-cell edits)
+  if (startCol === FOLLOW_UP_COL && endCol === FOLLOW_UP_COL && startRow === endRow) {
+    if ((e.value || "") === "") {
+      manageSecondFollowUpDate_(sheet, startRow);
+    }
   }
 }
 
+
 /**
- * INSTRUCTIONS FOR AUTOMATIC PRIORITY FLAGS:
- * 1. In the Apps Script editor, click the "Triggers" icon (looks like a clock) on the left sidebar.
- * 2. Click "+ Add Trigger" in the bottom right.
- * 3. Choose function to run: setPriorityFlags
- * 4. Choose which deployment should run: Head
- * 5. Select event source: Time-driven
- * 6. Select type of time based trigger: Day timer
- * 7. Select time of day: e.g., "8am - 9am" (or whenever you start your day)
- * 8. Click "Save".
- * This will now run automatically every morning.
+ * Checks if a daily trigger for the setPriorityFlags function exists, and creates one if it doesn't.
+ * This makes the setup fully automatic for the user.
+ */
+function createTimeDrivenTriggers_() {
+  const functionName = 'setPriorityFlags';
+  const triggers = ScriptApp.getProjectTriggers();
+  let triggerExists = false;
+
+  for (const trigger of triggers) {
+    if (trigger.getHandlerFunction() === functionName) {
+      triggerExists = true;
+      break;
+    }
+  }
+
+  if (!triggerExists) {
+    ScriptApp.newTrigger(functionName)
+      .timeBased()
+      .everyDays(1)
+      .atHour(8) // Runs every day around 8 AM
+      .create();
+  }
+}
+
+
+/**
+ * This function runs automatically every morning to set priority flags.
  */
 function setPriorityFlags() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(AFFECTED_SHEETS[0]);
@@ -127,15 +146,13 @@ function setPriorityFlags() {
   const dataRange = sheet.getDataRange();
   const values = dataRange.getValues();
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize to the start of the day
+  today.setHours(0, 0, 0, 0);
 
-  // Start from row 2 to skip header
   for (let i = 1; i < values.length; i++) {
     const row = i + 1;
     const status = values[i][STATUS_COL - 1];
     const approvalDate = new Date(values[i][APPROVAL_DATE_COL - 1]);
 
-    // Check if the date is valid
     if (status === "Not called" && approvalDate.valueOf()) {
       const threeDaysAgo = new Date(today);
       threeDaysAgo.setDate(today.getDate() - 3);
@@ -146,33 +163,9 @@ function setPriorityFlags() {
         sheet.getRange(row, PRIORITY_COL).clearContent();
       }
     } else {
-      // Clear flag if status is not "Not called" or date is invalid
       sheet.getRange(row, PRIORITY_COL).clearContent();
     }
   }
-}
-
-/**
- * Menu Function: Logs a follow-up call in the notes of the currently selected row.
- */
-function logFollowUpCall_() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  if (AFFECTED_SHEETS.indexOf(sheet.getName()) === -1) {
-    SpreadsheetApp.getUi().alert("This function is not available on this sheet.");
-    return;
-  }
-
-  const cell = sheet.getActiveCell();
-  const notesCell = sheet.getRange(cell.getRow(), NOTES_COL);
-  const currentNotes = notesCell.getValue();
-  const date = new Date().toLocaleDateString(); // e.g., "8/26/2025"
-
-  const newNote = `${date} Follow-up call:`;
-
-  // Prepend the new note to existing notes, separated by a new line.
-  const updatedNotes = currentNotes ? `${newNote}\n${currentNotes}` : newNote;
-
-  notesCell.setValue(updatedNotes);
 }
 
 // --- HELPER FUNCTIONS ---
@@ -204,15 +197,13 @@ function updateDaysRemaining_(sheet, row) {
     return;
   }
 
-  // Get the cell's address (e.g., "C3") for use in the formula
   const dateCellA1 = dateCell.getA1Notation();
   const formula = `=IF(ISBLANK(${dateCellA1}), "", MAX(0, 28 - (TODAY() - ${dateCellA1})))`;
   countdownCell.setFormula(formula);
 }
 
-
 /**
- * Adds or removes the Welcome Call timestamp based on the status change.
+ * Adds or removes the Welcome Call timestamp.
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object.
  * @param {number} row The row number that was edited.
  * @param {string} newStatus The new value from the status dropdown.
@@ -225,14 +216,67 @@ function updateWelcomeCallTimestamp_(sheet, row, newStatus, oldStatus) {
   const isNowWcDone = wcDoneStatuses.includes(newStatus);
   const wasPreviouslyWcDone = wcDoneStatuses.includes(oldStatus);
 
-  // If status changes TO a "WC done" status, add the timestamp.
   if (isNowWcDone && !wasPreviouslyWcDone) {
     timestampCell.setValue(new Date());
-  }
-  // If status changes FROM a "WC done" status to something else, clear the timestamp.
-  else if (!isNowWcDone && wasPreviouslyWcDone) {
+  } else if (!isNowWcDone && wasPreviouslyWcDone) {
     timestampCell.clearContent();
   }
+}
+
+/**
+ * Sets the first follow-up date (7 weekdays from WC) or clears it.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object.
+ * @param {number} row The row number.
+ * @param {string} newStatus The new status.
+ * @param {string} oldStatus The old status.
+ */
+function manageFirstFollowUpDate_(sheet, row, newStatus, oldStatus) {
+  const wcDoneStatuses = ["SPP WC done", "PPL WC done", "Nas WC done"];
+  const followUpCell = sheet.getRange(row, FOLLOW_UP_COL);
+
+  const isNowWcDone = wcDoneStatuses.includes(newStatus);
+  const wasPreviouslyWcDone = wcDoneStatuses.includes(oldStatus);
+
+  if (isNowWcDone && !wasPreviouslyWcDone) {
+    const followUpDate = getNextWeekday_(new Date(), 7);
+    followUpCell.setValue(followUpDate).setNumberFormat("M/d/yyyy");
+  } else if (!isNowWcDone && wasPreviouslyWcDone) {
+    followUpCell.clearContent();
+  }
+}
+
+/**
+ * Sets the second follow-up date (22 days from approval).
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The sheet object.
+ * @param {number} row The row number.
+ */
+function manageSecondFollowUpDate_(sheet, row) {
+  const approvalDateCell = sheet.getRange(row, APPROVAL_DATE_COL);
+  if (approvalDateCell.isBlank()) return;
+
+  const approvalDate = new Date(approvalDateCell.getValue());
+  const followUpCell = sheet.getRange(row, FOLLOW_UP_COL);
+  const secondFollowUpDate = getNextWeekday_(approvalDate, 22);
+  followUpCell.setValue(secondFollowUpDate).setNumberFormat("M/d/yyyy");
+}
+
+/**
+ * Calculates a future date, skipping weekends.
+ * @param {Date} startDate The date to start from.
+ * @param {number} daysToAdd The number of days to add.
+ * @returns {Date} The calculated future date, guaranteed to be a weekday.
+ */
+function getNextWeekday_(startDate, daysToAdd) {
+  const date = new Date(startDate);
+  date.setDate(date.getDate() + daysToAdd);
+  let dayOfWeek = date.getDay(); // Sunday = 0, Saturday = 6
+
+  if (dayOfWeek === 6) { // It's a Saturday
+    date.setDate(date.getDate() + 2); // Move to Monday
+  } else if (dayOfWeek === 0) { // It's a Sunday
+    date.setDate(date.getDate() + 1); // Move to Monday
+  }
+  return date;
 }
 
 /**
@@ -241,71 +285,28 @@ function updateWelcomeCallTimestamp_(sheet, row, newStatus, oldStatus) {
  * @param {string} status The value from the status dropdown.
  */
 function applyRowFormatting_(targetRow, status) {
-  let backgroundColor;
-  let fontColor;
-
+  let backgroundColor, fontColor;
   switch (status) {
     case "Not called":
-      backgroundColor = "#c00000"; // Dark Red
-      fontColor = "#ffffff"; // White
-      break;
+      backgroundColor = "#c00000"; fontColor = "#ffffff"; break;
     case "SPP called":
-      backgroundColor = "#ffc0cb"; // Light Pink
-      fontColor = "#000000"; // Black
-      break;
+      backgroundColor = "#ffc0cb"; fontColor = "#000000"; break;
     case "SPP WC done":
-      backgroundColor = "#ffffff"; // White
-      fontColor = "#ff00ff"; // Hot Pink
-      break;
+      backgroundColor = "#ffffff"; fontColor = "#ff00ff"; break;
     case "PPL Called":
-      backgroundColor = "#add8e6"; // Light Blue
-      fontColor = "#000000"; // Black
-      break;
+      backgroundColor = "#add8e6"; fontColor = "#000000"; break;
     case "PPL WC done":
-      backgroundColor = "#ffffff"; // White
-      fontColor = "#00008b"; // Dark Blue
-      break;
+      backgroundColor = "#ffffff"; fontColor = "#00008b"; break;
     case "Nas called":
-      backgroundColor = "#e6e6fa"; // Lavender
-      fontColor = "#000000"; // Black
-      break;
+      backgroundColor = "#e6e6fa"; fontColor = "#000000"; break;
     case "Nas WC done":
-      backgroundColor = "#ffffff"; // White
-      fontColor = "#800080"; // Dark Purple
-      break;
-    default: // Reset to default if status is cleared or doesn't match
-      backgroundColor = "#ffffff"; // White
-      fontColor = "#000000"; // Black
-      break;
+      backgroundColor = "#ffffff"; fontColor = "#800080"; break;
+    default:
+      backgroundColor = "#ffffff"; fontColor = "#000000"; break;
   }
-
   try {
     targetRow.setBackground(backgroundColor).setFontColor(fontColor);
   } catch (e) {
     console.error(`Error applying row formatting: ${e.message}`);
   }
 }
-
-/**
- * Applies standard formatting (clipping, alignment) to all data cells in the sheet.
- * Called on open and can be triggered manually from the menu.
- */
-function applySheetWideFormatting_() {
-  const sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
-  sheets.forEach(sheet => {
-    if (AFFECTED_SHEETS.indexOf(sheet.getName()) !== -1) {
-      try {
-        const dataRange = sheet.getDataRange();
-        if (dataRange.getWidth() > 0 && dataRange.getHeight() > 0) {
-          dataRange
-            .setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP)
-            .setVerticalAlignment("middle")
-            .setHorizontalAlignment("left");
-        }
-      } catch (error) {
-        console.error(`Error setting sheet-wide formatting for ${sheet.getName()}: ${error.message}`);
-      }
-    }
-  });
-}
-
