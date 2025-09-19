@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunch Punch Reminder</title>
+    <style>
+        /* CSS styles for the page */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #000; /* Fallback for video */
+        }
+
+        #video-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #video-background iframe {
+            width: 100vw;
+            height: 56.25vw; /* 16:9 aspect ratio */
+            min-height: 100vh;
+            min-width: 177.77vh; /* 16:9 aspect ratio for vertical screens */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none; /* Disables interaction with the video */
+        }
+
+        #ui-overlay {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); /* Dark overlay for readability */
+            color: white;
+            text-align: center;
+        }
+
+        #timer-container {
+            background-color: rgba(25, 25, 25, 0.85);
+            padding: 30px 40px;
+            border-radius: 15px;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 2.2em;
+            text-shadow: 2px 2px 4px #000000;
+        }
+
+        .input-group {
+            margin: 25px 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="number"] {
+            width: 90px;
+            padding: 15px;
+            font-size: 1.8em;
+            text-align: center;
+            border: 1px solid #555;
+            background-color: #333;
+            color: white;
+            border-radius: 8px;
+            -moz-appearance: textfield; /* Firefox */
+        }
+
+        /* Hide the arrows on number inputs */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .input-group span {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            transition: background-color 0.3s, transform 0.1s;
+            margin: 10px;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+
+        #set-timer-btn, #start-timer-btn {
+             background-color: #28a745; /* Green */
+        }
+
+        #set-timer-btn:hover, #start-timer-btn:hover {
+            background-color: #218838;
+        }
+
+        #dismiss-alarm-btn {
+            background-color: #dc3545; /* Red */
+        }
+
+        #dismiss-alarm-btn:hover {
+            background-color: #c82333;
+        }
+
+        #timer-display {
+            font-size: clamp(4em, 20vw, 10em); /* Responsive font size */
+            font-weight: bold;
+            text-shadow: 3px 3px 8px #000000;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- YouTube Fullscreen Background -->
+    <div id="video-background">
+        <iframe 
+            id="youtube-player"
+            src="https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=1&loop=1&playlist=jfKfPfyJRdk&controls=0&showinfo=0&autohide=1&modestbranding=1&iv_load_policy=3"
+            frameborder="0" 
+            allow="autoplay; encrypted-media" 
+            allowfullscreen>
+        </iframe>
+    </div>
+
+    <!-- UI Overlay -->
+    <div id="ui-overlay">
+        <div id="timer-container">
+            <!-- Setup View -->
+            <div id="timer-setup">
+                <h1>Set Your Lunch Timer</h1>
+                <div class="input-group">
+                    <input type="number" id="minutes" min="0" value="30" placeholder="MM">
+                    <span>:</span>
+                    <input type="number" id="seconds" min="0" max="59" value="0" placeholder="SS">
+                </div>
+                <button id="set-timer-btn">Set Lunch Break</button>
+                <button id="start-timer-btn" class="hidden">Start Timer</button>
+            </div>
+
+            <!-- Countdown Display View -->
+            <div id="timer-display" class="hidden">00:00</div>
+
+            <!-- Alarm View -->
+            <div id="alarm" class="hidden">
+                <h1>Time to Punch Back In!</h1>
+                <button id="dismiss-alarm-btn">Dismiss Alarm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- JAVASCRIPT LOGIC ---
+
+        // UI Elements
+        const timerSetupEl = document.getElementById('timer-setup');
+        const setTimerBtn = document.getElementById('set-timer-btn');
+        const startTimerBtn = document.getElementById('start-timer-btn');
+        const timerDisplayEl = document.getElementById('timer-display');
+        const alarmEl = document.getElementById('alarm');
+        const dismissAlarmBtn = document.getElementById('dismiss-alarm-btn');
+        const minutesInput = document.getElementById('minutes');
+        const secondsInput = document.getElementById('seconds');
+        const timerContainerEl = document.getElementById('timer-container');
+
+        // Timer State
+        let timerInterval = null;
+        let totalSeconds = 0;
+        let isTimerRunning = false;
+
+        // Web Audio API for Alarm Sound
+        let audioContext;
+        let oscillator;
+        let gainNode;
+
+        function setupAudio() {
+            // Initialize audio context on the first user interaction
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playAlarm() {
+            if (oscillator || !audioContext) return; // Prevent multiple alarms or if context is not ready
+            
+            // Create oscillator and gain node
+            oscillator = audioContext.createOscillator();
+            gainNode = audioContext.createGain();
+
+            // Connect them: oscillator -> gain -> destination (speakers)
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Configure the sound (A high-pitched but clean sine wave)
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(880, audioContext.currentTime); // A6 note
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Keep volume reasonable
+
+            // Make the sound beep
+            gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.5);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+
+            // Loop the sound
+            oscillator.onended = () => {
+                // Check if the alarm is still supposed to be playing
+                if (!alarmEl.classList.contains('hidden')) {
+                    playAlarm();
+                }
+            };
+        }
+
+        function stopAlarm() {
+            if (oscillator) {
+                oscillator.onended = null; // Remove the loop
+                oscillator.stop();
+                oscillator = null;
+            }
+        }
+
+        // --- Event Listeners ---
+        
+        setTimerBtn.addEventListener('click', () => {
+            // 1. Remind user to punch out. Using a custom modal would be better, but confirm is simple.
+            const confirmed = confirm("Reminder: Have you punched out for lunch?");
+            
+            // 2. If confirmed, show the start button
+            if (confirmed) {
+                setTimerBtn.classList.add('hidden');
+                startTimerBtn.classList.remove('hidden');
+            }
+        });
+
+        startTimerBtn.addEventListener('click', () => {
+            const minutes = parseInt(minutesInput.value, 10) || 0;
+            const seconds = parseInt(secondsInput.value, 10) || 0;
+            totalSeconds = (minutes * 60) + seconds;
+
+            if (totalSeconds > 0) {
+                timerContainerEl.style.backgroundColor = 'transparent';
+                timerContainerEl.style.boxShadow = 'none';
+                timerContainerEl.style.border = 'none';
+                timerSetupEl.classList.add('hidden');
+                timerDisplayEl.classList.remove('hidden');
+                startCountdown();
+            } else {
+                alert("Please set a time greater than 0 seconds.");
+            }
+        });
+
+        dismissAlarmBtn.addEventListener('click', () => {
+            alarmEl.classList.add('hidden');
+            stopAlarm();
+            
+            // Reset to the initial setup screen
+            timerContainerEl.style.backgroundColor = 'rgba(25, 25, 25, 0.85)';
+            timerContainerEl.style.boxShadow = '0 5px 25px rgba(0, 0, 0, 0.5)';
+            timerContainerEl.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            timerSetupEl.classList.remove('hidden');
+            setTimerBtn.classList.remove('hidden');
+            startTimerBtn.classList.add('hidden');
+        });
+
+        function startCountdown() {
+            isTimerRunning = true;
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                totalSeconds--;
+                updateTimerDisplay();
+
+                if (totalSeconds <= 0) {
+                    clearInterval(timerInterval);
+                    isTimerRunning = false;
+                    triggerAlarm();
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            timerDisplayEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function triggerAlarm() {
+            timerContainerEl.style.backgroundColor = 'rgba(25, 25, 25, 0.85)';
+            timerContainerEl.style.boxShadow = '0 5px 25px rgba(0, 0, 0, 0.5)';
+            timerContainerEl.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            timerDisplayEl.classList.add('hidden');
+            alarmEl.classList.remove('hidden');
+            playAlarm();
+        }
+
+        // Warn user before leaving the page if the timer is running
+        window.addEventListener('beforeunload', (event) => {
+            if (isTimerRunning) {
+                event.preventDefault();
+                event.returnValue = 'A timer is currently running. Are you sure you want to leave?';
+                return 'A timer is currently running. Are you sure you want to leave?';
+            }
+        });
+        
+        // Add a single, persistent event listener to initialize the audio context
+        document.body.addEventListener('click', setupAudio, { once: true });
+    </script>
+</body>
+</html>
