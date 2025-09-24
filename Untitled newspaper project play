@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Democrat and Chronicle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,700;1,400&family=Playfair+Display:wght@700;900&family=UnifrakturCook:wght@700&display=swap" rel="stylesheet">
+    <style>
+        /* Basic Setup & Typography */
+        body {
+            font-family: 'Lora', 'Georgia', serif;
+            background-color: #555; /* Dark background to frame the paper */
+            color: #1a1a1a;
+            margin: 0;
+            padding: 15px;
+            filter: grayscale(100%);
+            -webkit-filter: grayscale(100%); /* For Safari */
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: auto;
+            background-color: #ededed; /* Classic newsprint gray */
+            /* Grainy texture overlay for authenticity */
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIj48ZmlsdGVyIGlkPSJub2lzZSI+PGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjAuNzUiIG51bT9PY3RhdmVzPSIyIiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PC9maWx0ZXI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbHRlcj0idXJsKCNub2lzZSkIiBvcGFjaXR5PSIwLjA4Ii8+PC9zdmc+');
+            padding: 20px;
+            border: 1px solid #333;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* Header Styling - Democrat and Chronicle inspired */
+        header {
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 5px solid #000;
+            margin-bottom: 15px;
+        }
+
+        header h1 {
+            font-family: 'UnifrakturCook', cursive;
+            font-size: 6rem;
+            margin: 0 0 10px 0;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .header-details-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-top: 1px solid #000;
+            border-bottom: 2px solid #000;
+            padding: 5px 0;
+        }
+        
+        .header-left, .header-right {
+            text-align: left;
+        }
+
+        .header-center {
+            text-align: center;
+        }
+
+        .header-details-container span {
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .weather-box {
+            font-size: 0.8rem;
+            border-left: 1px solid #999;
+            padding-left: 10px;
+            margin-left: 10px;
+        }
+
+        /* Main Content Grid */
+        .main-content {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr); /* Classic 8-column layout */
+            gap: 20px;
+        }
+
+        /* Article Styling */
+        .article {
+            line-height: 1.5;
+            font-size: 0.95rem;
+            text-align: justify;
+            break-inside: avoid;
+            padding-bottom: 15px;
+        }
+        
+        .article h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            margin-top: 0;
+            margin-bottom: 8px;
+            line-height: 1.1;
+            font-weight: 900;
+        }
+
+        .article p {
+            margin: 0;
+        }
+
+        /* Specific Article Layouts */
+        .main-article {
+            grid-column: span 5;
+            border-right: 1px solid #ccc;
+            padding-right: 20px;
+        }
+
+        .main-article h2 {
+            font-size: 3rem;
+        }
+
+        .side-articles {
+            grid-column: span 3;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .side-articles .article h2 {
+            font-size: 1.6rem;
+        }
+        
+        .bottom-section {
+            grid-column: span 8;
+            padding-top: 15px;
+            border-top: 2px solid #000;
+            margin-top: 15px;
+        }
+
+        .bottom-articles {
+            column-count: 5;
+            column-gap: 20px;
+            column-rule: 1px solid #ccc;
+        }
+        
+        .bottom-articles .article h2 {
+            font-size: 1.4rem;
+        }
+        
+        hr.section-divider {
+            border: 0;
+            border-top: 1px solid #000;
+            margin: 10px 0;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .bottom-articles { column-count: 4; }
+            header h1 { font-size: 5rem; }
+        }
+        
+        @media (max-width: 992px) {
+            .main-article { grid-column: span 8; border-right: none; padding-right: 0; margin-bottom: 20px; }
+            .side-articles { grid-column: span 8; }
+            .bottom-articles { column-count: 3; }
+        }
+        
+        @media (max-width: 768px) {
+            .bottom-articles { column-count: 2; }
+            header h1 { font-size: 4rem; }
+            .header-details-container { flex-direction: column; align-items: center; text-align: center; }
+            .weather-box { border: none; padding: 5px 0 0 0; margin: 0; }
+        }
+        
+        @media (max-width: 576px) {
+            .bottom-articles { column-count: 1; }
+            header h1 { font-size: 3rem; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Democrat and Chronicle</h1>
+            <div class="header-details-container">
+                <div class="header-left">
+                    <span>An Independent Newspaper</span><br>
+                    <span id="date-display">WEDNESDAY, SEPTEMBER 24, 2025</span>
+                </div>
+                 <div class="header-center">
+                    <span>ROCHESTER, N.Y.</span>
+                </div>
+                <div class="header-right">
+                    <span>PRICE FIVE CENTS</span>
+                    <span class="weather-box" id="weather"></span>
+                </div>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="main-article article" id="article-1">
+                <h2 data-id="headline"></h2>
+                <p data-id="story"></p>
+            </div>
+            <div class="side-articles">
+                <div class="article" id="article-2">
+                    <h2 data-id="headline"></h2>
+                    <p data-id="story"></p>
+                </div>
+                <hr class="section-divider">
+                <div class="article" id="article-3">
+                    <h2 data-id="headline"></h2>
+                    <p data-id="story"></p>
+                </div>
+                 <hr class="section-divider">
+                 <div class="article" id="article-4">
+                    <h2 data-id="headline"></h2>
+                    <p data-id="story"></p>
+                </div>
+            </div>
+            <div class="bottom-section">
+                <div class="bottom-articles">
+                    <div class="article" id="article-5"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                    <div class="article" id="article-6"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                    <div class="article" id="article-7"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                    <div class="article" id="article-8"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                    <div class="article" id="article-9"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                    <div class="article" id="article-10"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                    <div class="article" id="article-11"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                    <div class="article" id="article-12"><h2 data-id="headline"></h2><p data-id="story"></p></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const headlines = [
+            "Geese Union on Genesee River Demands Better Bread Crumbs",
+            "Eastman Kodak Building Briefly Vanishes in 'Camera Shy' Incident",
+            "Wegmans to Introduce 'Thought-Powered' Shopping Carts, Chaos Ensues",
+            "Susan B. Anthony House Reports Suffragette Ghost Complaining About Wi-Fi Signal",
+            "Scientists at U of R Baffled by Squirrels' Advanced Knowledge of Particle Physics",
+            "Garbage Plate Declared Official Currency in Monroe County",
+            "Mysterious Hum Near High Falls Traced to Giant, Sleeping Cat",
+            "Xerox Develops 'Un-Copier' That Erases Documents From History",
+            "Strong Museum of Play Announces 'Existential Dread' Exhibit for Adults",
+            "Canal Boats Now Being Pulled by Teams of Highly Trained, Ambitions Snails",
+            "Rochester Lilac Festival to Feature Scent-Cancelling Technology This Year",
+            "Man Fined for Teaching Pigeons at Highland Park to Sove Rubik's Cubes",
+            "RIT Students Build Functional Time Machine; Use It Only to Attend Better Parties",
+            "Frontier Field Concession Stands to Begin Selling 'Invisibility Hot Dogs'"
+        ];
+
+        const intros = [
+            "In a stunning turn of events,", "City Hall was in an uproar today after", "Challenging the very fabric of our reality,",
+            "Sources deep within the city's infrastructure have confirmed that", "A public notice issued this morning warned residents that",
+            "Following an exhaustive, three-day investigation,", "In a move that has puzzled economists and bird-watchers alike,"
+        ];
+
+        const subjects = [
+            "a secret society of downtown parking meters", "the entire population of Cobbs Hill Park's deer",
+            "a sentient salt barrel from the City DPW", "a disgruntled group of retired Kodak engineers",
+            "the ghost of Nathaniel Rochester himself", "a flock of seagulls from Lake Ontario",
+            "the underground network of forgotten subway tunnels", "a surprisingly well-organized book club from the South Wedge"
+        ];
+
+        const actions = [
+            "has demanded representation on the city council.", "has successfully filed for municipal bankruptcy.",
+            "is now offering unsolicited life advice to passersby.", "has copyrighted the specific shade of gray of Rochester's sky.",
+            "announced its candidacy for the upcoming mayoral election.", "published a tell-all memoir about the city's early days.",
+            "is petitioning for the Erie Canal to be filled with cream soda.", "has begun construction on a massive suspension bridge made of licorice."
+        ];
+
+        const conclusions = [
+            "The mayor's office has responded with a terse 'no comment.'", "Experts say the situation could resolve itself by Tuesday.",
+            "Most citizens were reportedly unfazed, stating 'we've seen weirder.'", "This development is expected to dramatically impact property values.",
+            "A special task force has been assembled to 'look into it.'", "The long-term ramifications remain, for the moment, unknowable."
+        ];
+
+        function getRandomElement(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        function generateStory() {
+            const storyParts = [
+                getRandomElement(intros),
+                getRandomElement(subjects),
+                getRandomElement(actions),
+                getRandomElement(conclusions),
+                "Further details emerged throughout the day, causing widespread confusion.",
+                "Witnesses described the scene as 'mildly interesting' to 'utterly perplexing'.",
+                "The situation is expected to continue for the foreseeable future."
+            ];
+            return storyParts.slice(0, Math.floor(Math.random() * 3) + 4).join(" ");
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set date
+            const dateEl = document.getElementById('date-display');
+            dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+
+            // Set weather
+            const weatherEl = document.getElementById('weather');
+            const temps = [45, 52, 61, 73, 80];
+            const conditions = ['Cloudy', 'Mostly Sunny', 'Chance of Rain', 'Breezy'];
+            weatherEl.textContent = `WEATHER: ${getRandomElement(conditions)}, High ${getRandomElement(temps)}°`;
+
+            // Populate articles
+            const articles = document.querySelectorAll('.article');
+            let usedHeadlines = [...headlines];
+
+            articles.forEach(article => {
+                const headlineEl = article.querySelector('[data-id="headline"]');
+                const storyEl = article.querySelector('[data-id="story"]');
+
+                if (usedHeadlines.length === 0) usedHeadlines = [...headlines]; // Refill
+                
+                const headlineIndex = Math.floor(Math.random() * usedHeadlines.length);
+                headlineEl.textContent = usedHeadlines.splice(headlineIndex, 1)[0];
+                storyEl.textContent = generateStory();
+            });
+        });
+    </script>
+
+</body>
+</html>
+
