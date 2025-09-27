@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Tankwoo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas {
+            background-color: #000000;
+            border: 4px solid #4a4a4a;
+            border-radius: 8px;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+        .touch-control-zone {
+            position: absolute;
+            bottom: 0;
+            width: 50%;
+            height: 40%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .d-pad {
+            position: relative;
+            width: 150px;
+            height: 150px;
+        }
+        .d-pad .btn {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+        }
+        .d-pad .up { top: 0; left: 50px; }
+        .d-pad .down { bottom: 0; left: 50px; }
+        .d-pad .left { top: 50px; left: 0; }
+        .d-pad .right { top: 50px; right: 0; }
+        .fire-btn {
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 82, 82, 0.4);
+            border: 2px solid rgba(255, 82, 82, 0.7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+        }
+        .modal {
+            background-color: rgba(0, 0, 0, 0.85);
+            border: 4px solid #4a4a4a;
+            border-radius: 8px;
+        }
+        .custom-btn {
+            background-color: #333;
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 10px 15px;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .custom-btn:hover {
+            background-color: #444;
+            border-color: #777;
+        }
+        .custom-btn:disabled {
+            background-color: #222;
+            border-color: #444;
+            color: #777;
+            cursor: not-allowed;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-top: -10px;
+            margin-left: -10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        input[type="text"] {
+            background-color: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            color: white;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center h-screen p-2 md:p-4">
+
+    <!-- Game UI -->
+    <div class="w-full max-w-5xl mx-auto">
+        <div class="flex justify-between items-center mb-2 text-sm md:text-base">
+            <div id="score-display" class="flex items-center space-x-4">
+                <div id="player1-score" class="text-blue-400">P1: 0</div>
+                <div id="player2-score" class="text-red-400">P2: 0</div>
+            </div>
+            <div id="game-id-container" class="my-2 md:my-0 text-center">
+                <span class="text-gray-400">Game ID:</span>
+                <span id="game-id-display" class="text-yellow-400">N/A</span>
+            </div>
+            <!-- Spacer to balance the layout since buttons are moved -->
+            <div class="w-48 hidden md:block"></div> 
+        </div>
+    </div>
+    
+    <!-- Canvas Container -->
+    <div id="canvas-container" class="relative w-full max-w-5xl aspect-[4/3]">
+        <!-- Top Right Controls -->
+        <div class="absolute top-8 right-8 z-50 flex space-x-2">
+            <button id="instructions-btn" class="custom-btn text-xs">Manual</button>
+            <button id="diagnostics-btn" class="custom-btn text-xs">Copy Diag</button>
+        </div>
+
+         <canvas id="gameCanvas"></canvas>
+
+         <!-- Multiplayer Join Screen -->
+        <div id="join-screen" class="absolute inset-0 bg-black bg-opacity-90 flex flex-col justify-center items-center space-y-4 p-4 z-20">
+            <h1 class="text-2xl md:text-4xl text-yellow-400">Tankwoo</h1>
+            <div class="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                <button id="create-game-btn" class="custom-btn text-lg">Create New Game</button>
+                <button id="generate-map-btn" class="custom-btn text-lg">✨ Generate New Map</button>
+            </div>
+            <div class="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                <input type="text" id="join-game-input" placeholder="Enter Game ID" class="p-2 text-center">
+                <button id="join-game-btn" class="custom-btn">Join Game</button>
+            </div>
+            <p class="text-gray-400 mt-4 text-center">Play on the same device with Keyboard or Touch controls.</p>
+        </div>
+
+        <!-- Touch Controls -->
+        <div id="touch-controls" class="absolute inset-0 z-10 hidden">
+             <!-- Player 1 Controls -->
+            <div class="touch-control-zone left-0">
+                <div class="d-pad" id="p1-dpad">
+                    <div class="btn up" data-key="w">▲</div>
+                    <div class="btn down" data-key="s">▼</div>
+                    <div class="btn left" data-key="a">◀</div>
+                    <div class="btn right" data-key="d">▶</div>
+                </div>
+            </div>
+            <div class="touch-control-zone right-0 justify-end pr-8">
+                 <div class="fire-btn" id="p1-fire" data-key="f">FIRE</div>
+            </div>
+             <!-- Player 2 Controls (shown only for same-device mobile play, less common) -->
+            <div class="touch-control-zone right-0 opacity-50 hidden" style="top:0; height: 40%;"> <!-- P2 Top Right -->
+                <div class="d-pad" id="p2-dpad">
+                    <div class="btn up" data-key="ArrowUp">▲</div>
+                    <div class="btn down" data-key="ArrowDown">▼</div>
+                    <div class="btn left" data-key="ArrowLeft">◀</div>
+                    <div class="btn right" data-key="ArrowRight">▶</div>
+                </div>
+            </div>
+             <div class="touch-control-zone left-0 justify-start pl-8 opacity-50 hidden" style="top:0; height: 40%;"> <!-- P2 Top Left -->
+                 <div class="fire-btn" id="p2-fire" data-key="l">FIRE</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions Modal -->
+    <div id="instructions-modal" class="hidden absolute inset-0 z-30 flex justify-center items-center p-4">
+        <div class="modal w-full max-w-2xl p-6 space-y-4 text-xs md:text-sm">
+            <h2 class="text-xl md:text-2xl text-center text-yellow-400">Instruction Manual</h2>
+            <div>
+                <h3 class="text-lg text-green-400 mb-2">Objective</h3>
+                <p>Be the first to score 10 points! Drive your tank and shoot your opponent. Each hit earns one point.</p>
+            </div>
+            <div>
+                <h3 class="text-lg text-green-400 mb-2">✨ AI Features ✨</h3>
+                <p><strong class="text-yellow-500">Generate Map:</strong> Before starting, create a new random map using the Gemini API!</p>
+            </div>
+            <div>
+                <h3 class="text-lg text-green-400 mb-2">Controls (Keyboard)</h3>
+                <p><strong class="text-blue-400">Player 1:</strong> W (Up), S (Down), A (Left), D (Right). <strong class="text-red-400">F</strong> to Fire.</p>
+                <p><strong class="text-red-400">Player 2 (Same PC):</strong> Arrow Keys. <strong class="text-red-400">L</strong> to Fire.</p>
+            </div>
+             <div>
+                <h3 class="text-lg text-green-400 mb-2">Controls (Touchscreen)</h3>
+                <p>Use the on-screen D-pad to move and the FIRE button to shoot. The controls are on the bottom half of the screen for Player 1.</p>
+            </div>
+            <div>
+                <h3 class="text-lg text-green-400 mb-2">Multiplayer</h3>
+                <p><strong class="text-yellow-500">Create Game:</strong> Starts a new game and gives you a Game ID.</p>
+                <p><strong class="text-yellow-500">Join Game:</strong> Share the ID with a friend. They can enter it to join your game from their device.</p>
+            </div>
+            <div class="text-center pt-4">
+                <button id="close-modal-btn" class="custom-btn text-lg">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notification Modal -->
+    <div id="notification-modal" class="hidden absolute inset-0 z-40 flex justify-center items-center p-4 bg-black bg-opacity-70">
+        <div class="modal w-full max-w-sm p-6 space-y-4 text-center">
+            <p id="notification-message" class="text-lg"></p>
+            <button id="notification-close-btn" class="custom-btn">OK</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const p1ScoreElem = document.getElementById('player1-score');
+        const p2ScoreElem = document.getElementById('player2-score');
+        const gameIdDisplay = document.getElementById('game-id-display');
+        const joinScreen = document.getElementById('join-screen');
+        const generateMapBtn = document.getElementById('generate-map-btn');
+        const scoreDisplay = document.getElementById('score-display');
+        const gameIdContainer = document.getElementById('game-id-container');
+
+        // --- Firebase Setup ---
+        let db, auth, userId;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-tank-app';
+        let gameId = null;
+        let playerNumber = null; // 1 or 2
+        let gameStateUnsubscribe = null;
+
+        async function initializeFirebase() {
+            try {
+                 if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+                    console.warn("Firebase config not found. Running in local mode.");
+                    return;
+                }
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, user => {
+                    if (user) {
+                        userId = user.uid;
+                        console.log("Authenticated with UID:", userId);
+                    } else {
+                        userId = null;
+                        console.error("Authentication failed or user signed out.");
+                    }
+                });
+
+            } catch (e) {
+                console.error("Firebase initialization failed:", e);
+                db = null; 
+            }
+        }
+        
+        initializeFirebase();
+        
+        // --- Game State & Constants ---
+        const TANK_WIDTH = 28, TANK_HEIGHT = 36;
+        const BULLET_SIZE = 8, BULLET_SPEED = 7;
+        const TANK_SPEED = 2.5, TANK_ROTATION_SPEED = 0.05;
+        const P1_BULLET_COLOR = '#87CEFA'; // LightSkyBlue
+        const P2_BULLET_COLOR = '#F08080'; // LightCoral
+        let isGameOver = false;
+
+        let gameState = {
+            p1: { x: 100, y: 100, angle: 0, score: 0 },
+            p2: { x: 700, y: 500, angle: Math.PI, score: 0 },
+            bullets: [], // {x, y, angle, owner, color}
+            obstacles: [],
+            status: 'waiting' // waiting, active, finished
+        };
+        
+        let obstacleLayout = [
+            { x: 200, y: 150, w: 150, h: 30 }, { x: 450, y: 150, w: 150, h: 30 },
+            { x: 375, y: 250, w: 50, h: 100 },
+            { x: 100, y: 400, w: 200, h: 30 }, { x: 500, y: 400, w: 200, h: 30 },
+        ];
+        
+        function generateUniqueColors(count) {
+            const palette = [
+                '#1E90FF', '#FF4500', '#32CD32', '#FFD700', '#BA55D3',
+                '#00CED1', '#FF69B4', '#8A2BE2', '#ADFF2F', '#20B2AA'
+            ];
+            const colors = new Set();
+            let paletteIndex = 0;
+            while (colors.size < count) {
+                if (paletteIndex < palette.length) {
+                    colors.add(palette[paletteIndex++]);
+                } else {
+                    colors.add(`#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`);
+                }
+            }
+            return Array.from(colors);
+        }
+
+        function generateObstacles() {
+            const colors = generateUniqueColors(obstacleLayout.length);
+            gameState.obstacles = obstacleLayout.map((o, index) => ({
+                ...o,
+                color: colors[index] || '#cccccc'
+            }));
+            draw();
+        }
+        generateObstacles();
+
+
+        let keys = {};
+        let gamePaused = false;
+        let lastError = null;
+        const MAX_LOG_EVENTS = 15;
+        let eventLog = [];
+
+        function logEvent(message) {
+            eventLog.unshift(`${new Date().toLocaleTimeString()}: ${message}`);
+            if (eventLog.length > MAX_LOG_EVENTS) {
+                eventLog.pop();
+            }
+        }
+
+        // --- Gemini API ---
+        const API_KEY = ""; // Canvas will provide this
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
+
+        async function callGemini(payload, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return await response.json();
+                } catch (error) {
+                    console.error(`Gemini API call failed on attempt ${i + 1}:`, error);
+                    if (i === retries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
+                }
+            }
+        }
+
+        async function generateNewMapLayout() {
+            const buttonContent = generateMapBtn.innerHTML;
+            generateMapBtn.innerHTML = '<div class="loader"></div>';
+            generateMapBtn.disabled = true;
+
+            const systemPrompt = `You are a level designer for a 2D retro tank game. The game canvas is 800x600. Obstacles are simple rectangles. Generate a fun and balanced layout of 5 to 8 rectangular obstacles. Ensure there are no inescapable traps and that both players (starting at top-left and bottom-right) have clear paths to engage each other. Obstacle dimensions should be reasonable, e.g., width/height between 30 and 200. Do not place obstacles touching the edges of the canvas. The x coordinate must be between 20 and 780, and y between 20 and 580. Ensure the sum of x and w is less than 800, and the sum of y and h is less than 600.`;
+            const payload = {
+                contents: [{ parts: [{ text: "Generate a new obstacle layout." }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                x: { type: "NUMBER" }, y: { type: "NUMBER" },
+                                w: { type: "NUMBER" }, h: { type: "NUMBER" }
+                            },
+                            required: ["x", "y", "w", "h"]
+                        }
+                    }
+                }
+            };
+
+            try {
+                const result = await callGemini(payload);
+                const newLayoutText = result.candidates[0].content.parts[0].text;
+                const newLayout = JSON.parse(newLayoutText);
+                
+                if (Array.isArray(newLayout) && newLayout.every(o => 'x' in o && 'y' in o && 'w' in o && 'h' in o)) {
+                    obstacleLayout = newLayout;
+                    generateObstacles();
+                } else {
+                    throw new Error("Invalid map format received.");
+                }
+            } catch (error) {
+                console.error("Failed to generate new map:", error);
+                showNotification("Could not generate a new map. Please try again.");
+                lastError = error;
+            } finally {
+                generateMapBtn.innerHTML = '✨ Generate New Map';
+                generateMapBtn.disabled = false;
+            }
+        }
+
+        // --- Sizing and Input Handling ---
+        function resizeCanvas() {
+            const container = document.getElementById('canvas-container');
+            const aspectRatio = 4 / 3;
+            const containerWidth = container.offsetWidth;
+            const containerHeight = container.offsetHeight;
+
+            let newWidth, newHeight;
+
+            if (containerWidth / containerHeight > aspectRatio) {
+                newHeight = containerHeight;
+                newWidth = newHeight * aspectRatio;
+            } else {
+                newWidth = containerWidth;
+                newHeight = newWidth / aspectRatio;
+            }
+            
+            canvas.style.width = `${newWidth}px`;
+            canvas.style.height = `${newHeight}px`;
+
+            canvas.width = 800;
+            canvas.height = 600;
+        }
+
+        function setupInputListeners() {
+            window.addEventListener('keydown', e => { keys[e.key] = true; });
+            window.addEventListener('keyup', e => { keys[e.key] = false; });
+            
+            const isTouchDevice = 'ontouchstart' in window;
+            if (isTouchDevice) {
+                document.getElementById('touch-controls').classList.remove('hidden');
+                setupTouchControls('p1-dpad');
+                setupTouchControls('p1-fire');
+            }
+        }
+
+        function setupTouchControls(elementId) {
+            const element = document.getElementById(elementId);
+            element.addEventListener('touchstart', (e) => handleTouchEvent(e, true), { passive: false });
+            element.addEventListener('touchend', (e) => handleTouchEvent(e, false), { passive: false });
+            element.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+            element.addEventListener('touchcancel', (e) => handleTouchEvent(e, false), { passive: false });
+        }
+
+        function handleTouchEvent(e, isPressed) {
+             e.preventDefault();
+             for (const touch of e.changedTouches) {
+                 const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                 if (target && target.dataset.key) {
+                     keys[target.dataset.key] = isPressed;
+                 }
+             }
+        }
+
+
+        // --- Drawing Functions ---
+        function drawTank(tank, color, turretColor) {
+            ctx.save();
+            ctx.translate(tank.x, tank.y);
+            ctx.rotate(tank.angle);
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(-TANK_WIDTH / 2, -TANK_HEIGHT / 2, TANK_WIDTH, TANK_HEIGHT);
+            
+            ctx.fillStyle = turretColor;
+            ctx.fillRect(-5, -TANK_HEIGHT/2 - 5, 10, TANK_HEIGHT/2 + 5);
+
+            ctx.beginPath();
+            ctx.arc(0, 0, TANK_WIDTH/3, 0, 2 * Math.PI);
+            ctx.fillStyle = turretColor;
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawBullet(bullet) {
+            ctx.fillStyle = bullet.color || 'yellow';
+            ctx.fillRect(bullet.x - BULLET_SIZE / 2, bullet.y - BULLET_SIZE / 2, BULLET_SIZE, BULLET_SIZE);
+        }
+
+        function drawObstacles() {
+            gameState.obstacles.forEach(o => {
+                ctx.fillStyle = o.color;
+                ctx.fillRect(o.x, o.y, o.w, o.h);
+            });
+        }
+        
+        function drawGameOver() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '40px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            const winner = gameState.p1.score >= 10 ? "Player 1" : "Player 2";
+            ctx.fillText(`${winner} Wins!`, canvas.width / 2, canvas.height / 2);
+        }
+
+        // --- Game Logic ---
+        function handleMovement(tank, up, down, left, right) {
+            const originalPos = { x: tank.x, y: tank.y, angle: tank.angle };
+            
+            if (keys[left]) tank.angle -= TANK_ROTATION_SPEED;
+            if (keys[right]) tank.angle += TANK_ROTATION_SPEED;
+            if (keys[up]) {
+                tank.x += Math.sin(tank.angle) * TANK_SPEED;
+                tank.y -= Math.cos(tank.angle) * TANK_SPEED;
+            }
+            if (keys[down]) {
+                tank.x -= Math.sin(tank.angle) * TANK_SPEED;
+                tank.y += Math.cos(tank.angle) * TANK_SPEED;
+            }
+
+            if (checkCollision(tank)) {
+                tank.x = originalPos.x;
+                tank.y = originalPos.y;
+            }
+            
+            if (tank.angle !== originalPos.angle) {
+                if (checkCollision(tank)) {
+                   tank.angle = originalPos.angle;
+                }
+            }
+
+            tank.x = Math.max(TANK_WIDTH / 2, Math.min(canvas.width - TANK_WIDTH / 2, tank.x));
+            tank.y = Math.max(TANK_HEIGHT / 2, Math.min(canvas.height - TANK_HEIGHT / 2, tank.y));
+        }
+        
+        function handleShooting(tank, fireKey, owner) {
+             if (keys[fireKey] && !gameState.bullets.some(b => b.owner === owner)) {
+                logEvent(`${owner} fired`);
+                gameState.bullets.push({
+                    x: tank.x,
+                    y: tank.y,
+                    angle: tank.angle,
+                    owner: owner,
+                    color: owner === 'p1' ? P1_BULLET_COLOR : P2_BULLET_COLOR
+                });
+                keys[fireKey] = false;
+             }
+        }
+
+        function updateBullets() {
+            for (let i = gameState.bullets.length - 1; i >= 0; i--) {
+                const bullet = gameState.bullets[i];
+                bullet.x += Math.sin(bullet.angle) * BULLET_SPEED;
+                bullet.y -= Math.cos(bullet.angle) * BULLET_SPEED;
+
+                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    gameState.bullets.splice(i, 1);
+                    continue;
+                }
+                
+                let hitObstacle = false;
+                for(const obs of gameState.obstacles) {
+                    if(bullet.x > obs.x && bullet.x < obs.x + obs.w && bullet.y > obs.y && bullet.y < obs.y + obs.h) {
+                         gameState.bullets.splice(i, 1);
+                         hitObstacle = true;
+                         break;
+                    }
+                }
+                if(hitObstacle) continue;
+
+                const targetTank = bullet.owner === 'p1' ? gameState.p2 : gameState.p1;
+                const targetKey = bullet.owner === 'p1' ? 'p2' : 'p1';
+                const dx = bullet.x - targetTank.x;
+                const dy = bullet.y - targetTank.y;
+                if (Math.sqrt(dx*dx + dy*dy) < (TANK_WIDTH + TANK_HEIGHT) / 4) {
+                    gameState[bullet.owner].score++;
+                    logEvent(`${bullet.owner} scored on ${targetKey}`);
+                    resetTank(targetKey);
+                    gameState.bullets.splice(i, 1);
+
+                    if (gameState[bullet.owner].score >= 10) {
+                        isGameOver = true;
+                        gameState.status = 'finished';
+                        logEvent(`Game over. ${bullet.owner} wins.`);
+                    }
+                }
+            }
+        }
+        
+        function resetTank(playerKey) {
+            if (playerKey === 'p1') {
+                gameState.p1.x = 100;
+                gameState.p1.y = 100;
+                gameState.p1.angle = 0;
+            } else {
+                gameState.p2.x = 700;
+                gameState.p2.y = 500;
+                gameState.p2.angle = Math.PI;
+            }
+        }
+        
+        function checkCollision(tank) {
+            const tankRect = { x: tank.x - TANK_WIDTH/2, y: tank.y - TANK_HEIGHT/2, w: TANK_WIDTH, h: TANK_HEIGHT };
+            for (const obs of gameState.obstacles) {
+                if (tankRect.x < obs.x + obs.w && tankRect.x + tankRect.w > obs.x &&
+                    tankRect.y < obs.y + obs.h && tankRect.y + tankRect.h > obs.y) {
+                    return true;
+                }
+            }
+            const otherTank = (tank === gameState.p1) ? gameState.p2 : gameState.p1;
+            const dx = tank.x - otherTank.x;
+            const dy = tank.y - otherTank.y;
+            if(Math.sqrt(dx*dx + dy*dy) < TANK_WIDTH) return true;
+
+            return false;
+        }
+
+
+        // --- Firestore Networking ---
+        async function createGame() {
+            if (!db) {
+                console.log("DB not ready. Starting local game.");
+                startGameAsPlayer(1);
+                return;
+            }
+            logEvent(`Attempting to create game...`);
+            const gamesCollection = collection(db, `artifacts/${appId}/public/data/tank-game`);
+            const newGameRef = doc(gamesCollection);
+            gameId = newGameRef.id;
+            playerNumber = 1;
+            
+            const initialGameState = {
+                p1: { x: 100, y: 100, angle: 0, score: 0, uid: userId },
+                p2: { x: 700, y: 500, angle: Math.PI, score: 0, uid: null },
+                bullets: [],
+                obstacles: gameState.obstacles,
+                status: 'waiting'
+            };
+            
+            try {
+                await setDoc(newGameRef, initialGameState);
+                logEvent(`Player 1 (uid: ${userId}) created game ${gameId}`);
+                listenToGameState(gameId);
+                startGameAsPlayer(1);
+            } catch (e) {
+                console.error("Error creating game:", e);
+                logEvent(`Game creation failed: ${e.message}`);
+                lastError = e;
+            }
+        }
+        
+        async function joinGame() {
+            const joinId = document.getElementById('join-game-input').value.trim();
+            if (!joinId || !db) {
+                showNotification("Please enter a valid Game ID.");
+                return;
+            }
+            logEvent(`Attempting to join game ${joinId}...`);
+            gameId = joinId;
+            playerNumber = 2;
+            
+            const gameRef = doc(db, `artifacts/${appId}/public/data/tank-game/${gameId}`);
+            try {
+                await updateDoc(gameRef, { 'p2.uid': userId, status: 'active' });
+                logEvent(`Player 2 (uid: ${userId}) joined game ${gameId}`);
+                listenToGameState(gameId);
+                startGameAsPlayer(2);
+            } catch(e) {
+                console.error("Error joining game:", e);
+                logEvent(`Game join failed: ${e.message}`);
+                lastError = e;
+                showNotification("Could not find or join game. Check the ID.");
+            }
+        }
+
+        function listenToGameState(id) {
+            if (gameStateUnsubscribe) gameStateUnsubscribe();
+            const gameRef = doc(db, `artifacts/${appId}/public/data/tank-game/${id}`);
+            gameStateUnsubscribe = onSnapshot(gameRef, (doc) => {
+                if (doc.exists()) {
+                    const data = doc.data();
+                    
+                    if(JSON.stringify(gameState.obstacles) !== JSON.stringify(data.obstacles)) {
+                        gameState.obstacles = data.obstacles;
+                    }
+
+                    if (playerNumber === 1) {
+                        gameState.p2 = data.p2;
+                        gameState.bullets = data.bullets;
+                    } else if (playerNumber === 2) {
+                        gameState.p1 = data.p1;
+                        gameState.bullets = data.bullets;
+                    } else {
+                         Object.assign(gameState, data);
+                    }
+                     gameState.p1.score = data.p1.score;
+                     gameState.p2.score = data.p2.score;
+                     gameState.status = data.status;
+                     isGameOver = data.status === 'finished';
+                }
+            });
+        }
+        
+        async function updateRemoteGameState() {
+            if (!gameId || !db || !playerNumber) return;
+            const gameRef = doc(db, `artifacts/${appId}/public/data/tank-game/${gameId}`);
+            try {
+                let updates = {
+                    bullets: gameState.bullets,
+                    'p1.score': gameState.p1.score,
+                    'p2.score': gameState.p2.score,
+                    status: gameState.status
+                };
+                if (playerNumber === 1) {
+                    updates.p1 = gameState.p1;
+                } else {
+                    updates.p2 = gameState.p2;
+                }
+                await updateDoc(gameRef, updates);
+            } catch (e) {
+                console.error("Failed to update game state", e);
+                lastError = e;
+            }
+        }
+
+        function startGameAsPlayer(pNum) {
+            playerNumber = pNum;
+            gameIdDisplay.textContent = gameId || "Local";
+            joinScreen.classList.add('hidden');
+            scoreDisplay.classList.remove('hidden');
+            gameIdContainer.classList.remove('hidden');
+            if(!gameLoopAnimation) gameLoop();
+        }
+
+        let gameLoopAnimation = null;
+        function update() {
+            if (gamePaused || isGameOver) return;
+            
+            if (playerNumber === 1 || !playerNumber) {
+                handleMovement(gameState.p1, 'w', 's', 'a', 'd');
+                handleShooting(gameState.p1, 'f', 'p1');
+            }
+
+             if (playerNumber === 2 || !playerNumber) {
+                 handleMovement(gameState.p2, 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
+                 handleShooting(gameState.p2, 'l', 'p2');
+            }
+            
+            if (playerNumber === 1 || !playerNumber) {
+                updateBullets();
+            }
+            updateRemoteGameState();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawObstacles();
+            drawTank(gameState.p1, '#4287f5', '#2a5ba8');
+            drawTank(gameState.p2, '#f54242', '#a82a2a');
+            gameState.bullets.forEach(drawBullet);
+            
+            p1ScoreElem.textContent = `P1: ${gameState.p1.score}`;
+            p2ScoreElem.textContent = `P2: ${gameState.p2.score}`;
+            
+            if(isGameOver) {
+                drawGameOver();
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            gameLoopAnimation = requestAnimationFrame(gameLoop);
+        }
+        
+        // --- UI & Modals ---
+        document.getElementById('create-game-btn').onclick = createGame;
+        document.getElementById('join-game-btn').onclick = joinGame;
+        generateMapBtn.onclick = generateNewMapLayout;
+
+        const instructionsModal = document.getElementById('instructions-modal');
+        const notificationModal = document.getElementById('notification-modal');
+        const notificationMessage = document.getElementById('notification-message');
+        
+        let shouldUnpauseOnClose = false;
+
+        const openInstructions = () => {
+            gamePaused = true;
+            shouldUnpauseOnClose = true;
+            instructionsModal.classList.remove('hidden');
+        };
+        const closeInstructions = () => {
+            if (shouldUnpauseOnClose) {
+                gamePaused = false;
+                shouldUnpauseOnClose = false;
+            }
+            instructionsModal.classList.add('hidden');
+        };
+
+        function showNotification(message, shouldPause = false) {
+            notificationMessage.textContent = message;
+            notificationModal.classList.remove('hidden');
+            if (shouldPause && !gamePaused) {
+                gamePaused = true;
+                shouldUnpauseOnClose = true;
+            }
+        }
+
+        document.getElementById('notification-close-btn').onclick = () => {
+            notificationModal.classList.add('hidden');
+            if (shouldUnpauseOnClose) {
+                // Only unpause if the instructions modal isn't also open
+                if (instructionsModal.classList.contains('hidden')) {
+                     gamePaused = false;
+                }
+                shouldUnpauseOnClose = false;
+            }
+        };
+
+        document.getElementById('instructions-btn').onclick = openInstructions;
+        document.getElementById('close-modal-btn').onclick = closeInstructions;
+        
+        const copyDiagnostics = () => {
+            const diagData = {
+                timestamp: new Date().toISOString(),
+                appId,
+                gameId,
+                userId,
+                playerNumber,
+                isGameOver,
+                isPaused: gamePaused,
+                gameState: {
+                   p1: gameState.p1, p2: gameState.p2,
+                   bullets: `Count: ${gameState.bullets.length}`,
+                   obstacles: `Count: ${gameState.obstacles.length}`,
+                   status: gameState.status,
+                },
+                inputState: keys,
+                recentEvents: eventLog,
+                performance: {
+                    memory: performance.memory ? performance.memory.usedJSHeapSize : 'N/A'
+                },
+                browser: {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform,
+                    language: navigator.language,
+                },
+                screen: {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    pixelRatio: window.devicePixelRatio,
+                },
+                lastError: lastError ? { message: lastError.message, stack: lastError.stack } : null
+            };
+
+            const diagString = JSON.stringify(diagData, null, 2);
+            navigator.clipboard.writeText(diagString)
+                .then(() => showNotification("Diagnostic info copied to clipboard!", true))
+                .catch(err => {
+                    console.error("Failed to copy diagnostics:", err);
+                    showNotification("Failed to copy diagnostics. See console.", true);
+                    lastError = err;
+                });
+        };
+        document.getElementById('diagnostics-btn').onclick = copyDiagnostics;
+
+        // --- Initialization ---
+        function setInitialUI() {
+            scoreDisplay.classList.add('hidden');
+            gameIdContainer.classList.add('hidden');
+            joinScreen.classList.remove('hidden');
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        setupInputListeners();
+        setInitialUI();
+        draw(); // Initial draw to show map
+    </script>
+</body>
+</html>
+
