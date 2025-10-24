@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Endgame Trainer</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- jQuery (provides $) - CRITICAL for this version -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    
+    <!-- Chess.js (the game logic and AI) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" xintegrity="sha512-xNLefnH8+H3LnH/uD6qbYROWt4EcVgcKGTmB3AJmXNbpwe9RHBf9i/b1MdtDqaKzQjrDAk1i/cN5+JO3Ntzglg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #board-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Max width for the entire board area */
+            /* We let the SVG's viewBox handle the aspect ratio */
+        }
+
+        #chess-svg {
+            width: 100%;
+            height: 100%;
+            background-color: transparent; 
+            display: block; /* Remove extra space below SVG */
+        }
+
+        .square-light { fill: #f0d9b5; } /* Light square color */
+        .square-dark { fill: #b58863; }  /* Dark square color */
+
+        /* Styles for chess pieces (using Unicode chess symbols) */
+        .piece {
+            font-family: "Segoe UI Symbol", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Liberation Sans", sans-serif;
+            font-size: 70px; /* Piece size */
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none; /* Allows clicks to pass through to the squares */
+        }
+        .piece-w { fill: #fff; stroke: #333; stroke-width: 1px; }
+        .piece-b { fill: #000; stroke: #ccc; stroke-width: 1px; }
+
+        /* Styles for board notation (ranks and files) */
+        .notation {
+            font-family: 'Inter', sans-serif;
+            font-size: 18px; /* Notation font size */
+            fill: #777; /* Gray color for notation */
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: central;
+        }
+        
+        /* Highlight for draggable pieces */
+        .draggable-piece {
+            cursor: grab;
+        }
+        
+        /* Highlight for selected square */
+        .square.selected {
+            fill: rgba(30, 144, 255, 0.5); /* Dodger blue highlight */
+        }
+        /* Highlight for target squares (legal moves) */
+        .square.highlight {
+            fill: rgba(0, 255, 0, 0.3); /* Green highlight */
+        }
+        .square.last-move-highlight {
+            fill: rgba(255, 255, 0, 0.5); /* Yellow highlight for last move */
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-3xl flex flex-col items-center">
+        <h1 class="text-3xl font-bold mb-4">Endgame Trainer</h1>
+        
+        <!-- Status Message -->
+        <div id="status" class="h-10 text-xl font-medium mb-2 text-center">
+            Load a puzzle to begin!
+        </div>
+
+        <!-- SVG Chess Board Container -->
+        <div id="board-container" class="mb-4">
+            <!-- SVG will be generated here -->
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex flex-wrap justify-center gap-3 mb-6">
+            <button id="newPuzzleButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-200">
+                New Puzzle
+            </button>
+            <button id="playWhiteButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-lg transition duration-200" disabled>
+                Play as White
+            </button>
+            <button id="playBlackButton" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-200" disabled>
+                Play as Black
+            </button>
+        </div>
+
+        <!-- Diagnostic Button -->
+        <button id="diagButton" class="bg-green-700 hover:bg-green-800 text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-200">
+            Copy Diagnostic Log
+        </button>
+        
+        <!-- Clipboard Copy Confirmation -->
+        <div id="copyMessage" class="mt-2 text-green-400 font-medium" style="display: none;">
+            Diagnostic log copied to clipboard!
+        </div>
+    </div>
+
+    <script>
+        // --- Global Variables ---
+        let game = new Chess();   // The game logic (Chess.js)
+        let userColor = 'w';      // The player's chosen color
+        let isPlayerTurn = false;
+        let diagnosticLog = [];   // Array to store debug information
+
+        // SVG related variables
+        let selectedSquare = null; // Tracks the currently selected square for piece movement
+        let lastMove = null;       // Tracks the last move for highlighting
+
+        // Unicode Chess Pieces (for SVG text rendering)
+        const unicodePieces = {
+            'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔',
+            'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚'
+        };
+
+        // --- Endgame Puzzle "Database" ---
+        const puzzles = [
+            '8/8/1P6/8/8/8/k7/4K3 w - - 0 1', // White to win: King and Pawn vs King
+            '8/8/8/8/8/k7/8/R3K3 w - - 0 1', // White to win: Rook vs King
+            '8/8/8/8/8/k7/8/Q3K3 w - - 0 1', // White to win: Queen vs King
+            '5k2/8/8/8/8/8/4P3/4K3 w - - 0 1', // White to win: King and Pawn vs King (Opposition)
+            '7k/R7/8/8/8/8/8/K7 w - - 0 1', // White to win: Lucena Position (Rook + Pawn)
+            'k7/8/P7/8/8/8/8/K7 w - - 0 1', // White to win: Pawn race
+            '8/k7/3p4/p2P4/P3K3/8/8/8 w - - 0 1' // White to win: King and Pawn endgame
+        ];
+
+        // --- Core Functions ---
+
+        function logDiag(type, data) {
+            const timestamp = new Date().toISOString();
+            const logEntry = { timestamp, type, data };
+            diagnosticLog.push(logEntry);
+            if (type === 'ERROR') {
+                console.error('DIAGNOSTIC ERROR:', data);
+            } else {
+                console.log('DIAGNOSTIC INFO:', logEntry);
+            }
+        }
+        
+        function getGameOverFlags() {
+            return {
+                is_checkmate: game.in_checkmate(),
+                is_draw: game.in_draw(),
+                is_stalemate: game.in_stalemate(),
+                is_threefold_repetition: game.in_threefold_repetition(),
+                is_insufficient_material: game.insufficient_material(),
+                is_fifty_move_rule: game.in_fifty_move_rule()
+            };
+        }
+
+        function updateStatus() {
+            let status = '';
+            let moveColor = (game.turn() === 'w') ? 'White' : 'Black';
+
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    status = `Checkmate! ${moveColor === 'White' ? 'Black' : 'White'} wins.`;
+                } else if (game.in_draw()) {
+                    status = 'Draw!';
+                    if (game.in_stalemate()) {
+                        status += ' (Stalemate)';
+                    } else if (game.in_threefold_repetition()) {
+                        status += ' (Threefold Repetition)';
+                    } else if (game.insufficient_material()) { // FIX: was in_sufficiency
+                        status += ' (Insufficient Material)';
+                    } else if (game.in_fifty_move_rule()) { // FIX: was in_50_move_rule
+                        status += ' (50-Move Rule)';
+                    }
+                }
+                isPlayerTurn = false;
+            } else {
+                status = `${moveColor} to move.`;
+                isPlayerTurn = (game.turn() === userColor);
+            }
+
+            $('#status').text(status);
+        }
+
+        /**
+         * Converts a file/rank (e.g., 'a1') to SVG x, y coordinates.
+         * Board is 800x800, with a 30px margin. Board starts at (30, 30).
+         * Each square is (800 - 60) / 8 = 92.5px
+         */
+        const SQUARE_SIZE = (800 - 60) / 8; // 92.5
+        const BOARD_START = 30;
+
+        function squareToCoords(square) {
+            const file = square.charCodeAt(0) - 'a'.charCodeAt(0); // 0-7 for 'a'-'h'
+            const rank = 8 - parseInt(square[1]);                 // 0-7 for '8'-'1'
+            
+            const x = BOARD_START + (file * SQUARE_SIZE) + (SQUARE_SIZE / 2);
+            const y = BOARD_START + (rank * SQUARE_SIZE) + (SQUARE_SIZE / 2);
+            return { x, y }; // Center of the square
+        }
+
+        /**
+         * Renders the chess board and pieces using SVG.
+         */
+        function drawBoard() {
+            const boardContainer = document.getElementById('board-container');
+            boardContainer.innerHTML = ''; // Clear existing board
+
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute('id', 'chess-svg');
+            svg.setAttribute('viewBox', '0 0 800 800'); // Base 800x800 canvas
+            boardContainer.appendChild(svg);
+
+            // Draw squares
+            for (let i = 0; i < 8; i++) { // Rank (row)
+                for (let j = 0; j < 8; j++) { // File (column)
+                    const squareColor = (i + j) % 2 === 0 ? 'square-light' : 'square-dark';
+                    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                    
+                    const x = BOARD_START + (j * SQUARE_SIZE);
+                    const y = BOARD_START + (i * SQUARE_SIZE);
+                    
+                    rect.setAttribute('x', x);
+                    rect.setAttribute('y', y);
+                    rect.setAttribute('width', SQUARE_SIZE);
+                    rect.setAttribute('height', SQUARE_SIZE);
+                    rect.setAttribute('class', `square ${squareColor}`);
+                    rect.setAttribute('data-square', String.fromCharCode('a'.charCodeAt(0) + j) + (8 - i));
+                    svg.appendChild(rect);
+                }
+            }
+            
+            // Draw notation
+            for (let i = 0; i < 8; i++) {
+                // Add rank notation (left side)
+                const rankText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                rankText.setAttribute('x', BOARD_START / 2 - 5); // Center in left margin
+                rankText.setAttribute('y', BOARD_START + (i * SQUARE_SIZE) + (SQUARE_SIZE / 2));
+                rankText.setAttribute('class', 'notation');
+                rankText.textContent = (8 - i).toString();
+                svg.appendChild(rankText);
+                
+                // Add file notation (bottom side)
+                const fileText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                fileText.setAttribute('x', BOARD_START + (i * SQUARE_SIZE) + (SQUARE_SIZE / 2));
+                fileText.setAttribute('y', 800 - (BOARD_START / 2) + 5); // Center in bottom margin
+                fileText.setAttribute('class', 'notation');
+                fileText.textContent = String.fromCharCode('a'.charCodeAt(0) + i);
+                svg.appendChild(fileText);
+            }
+            
+            drawPieces();
+            applyHighlights();
+        }
+
+        /**
+         * Draws pieces based on the current game FEN.
+         */
+        function drawPieces() {
+            // Remove old pieces
+            document.querySelectorAll('.piece').forEach(p => p.remove());
+
+            const currentBoard = game.board();
+            const svg = document.getElementById('chess-svg');
+
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const piece = currentBoard[i][j];
+                    if (piece) {
+                        const { x, y } = squareToCoords(String.fromCharCode('a'.charCodeAt(0) + j) + (8 - i));
+                        const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                        text.setAttribute('x', x);
+                        text.setAttribute('y', y);
+                        text.setAttribute('class', `piece piece-${piece.color} ${piece.color === userColor ? 'draggable-piece' : ''}`);
+                        text.setAttribute('data-piece', piece.color + piece.type.toUpperCase());
+                        text.setAttribute('data-square', String.fromCharCode('a'.charCodeAt(0) + j) + (8 - i));
+                        
+                        // Set specific unicode char based on piece type and color
+                        if (piece.color === 'w') {
+                            text.textContent = unicodePieces[piece.type.toUpperCase()];
+                        } else {
+                            text.textContent = unicodePieces[piece.type.toLowerCase()];
+                        }
+
+                        svg.appendChild(text);
+                    }
+                }
+            }
+        }
+        
+        /**
+         * Applies visual highlights (selected square, legal moves, last move).
+         */
+        function applyHighlights() {
+            document.querySelectorAll('.square').forEach(sq => {
+                sq.classList.remove('selected', 'highlight', 'last-move-highlight');
+                sq.removeAttribute('data-is-legal-target'); // Remove custom attribute
+            });
+
+            if (selectedSquare) {
+                const selectedRect = document.querySelector(`.square[data-square="${selectedSquare}"]`);
+                if (selectedRect) {
+                    selectedRect.classList.add('selected');
+                }
+
+                if (isPlayerTurn) { // Only highlight legal moves if it's the player's turn
+                    const legalMoves = game.moves({ square: selectedSquare, verbose: true });
+                    legalMoves.forEach(move => {
+                        const targetRect = document.querySelector(`.square[data-square="${move.to}"]`);
+                        if (targetRect) {
+                            targetRect.classList.add('highlight');
+                            targetRect.setAttribute('data-is-legal-target', 'true'); // Mark as legal target
+                        }
+                    });
+                }
+            }
+
+            // Highlight the last move
+            if (lastMove) {
+                const fromRect = document.querySelector(`.square[data-square="${lastMove.from}"]`);
+                const toRect = document.querySelector(`.square[data-square="${lastMove.to}"]`);
+                if (fromRect) fromRect.classList.add('last-move-highlight');
+                if (toRect) toRect.classList.add('last-move-highlight');
+            }
+        }
+        
+        /**
+         * Event listener for clicking on squares to select/move pieces.
+         */
+        function handleSquareClick(event) {
+            const clickedSquare = event.target.dataset.square;
+
+            if (!clickedSquare) { // Clicked outside a square
+                selectedSquare = null;
+                applyHighlights();
+                return;
+            }
+
+            const pieceOnClickedSquare = game.get(clickedSquare);
+
+            if (selectedSquare) {
+                // A piece is already selected, try to move it
+                const source = selectedSquare;
+                const target = clickedSquare;
+                
+                const targetRect = document.querySelector(`.square[data-square="${target}"]`);
+                if (targetRect && targetRect.getAttribute('data-is-legal-target') === 'true') {
+                    attemptMove(source, target);
+                } else if (source === target) { // Deselect if clicking same square again
+                    selectedSquare = null;
+                } else if (pieceOnClickedSquare && pieceOnClickedSquare.color === userColor) { // Select new piece
+                    selectedSquare = clickedSquare;
+                } else { // Clicked somewhere else illegal
+                    selectedSquare = null;
+                }
+            } else {
+                // No piece selected yet, try to select one
+                if (pieceOnClickedSquare && pieceOnClickedSquare.color === userColor && isPlayerTurn) {
+                    selectedSquare = clickedSquare;
+                }
+            }
+            applyHighlights();
+        }
+        
+        /**
+         * Attempts to make a move.
+         */
+        function attemptMove(source, target) {
+            logDiag('USER_ATTEMPT_MOVE', { source, target, userColor, isPlayerTurn });
+
+            if (!isPlayerTurn) {
+                logDiag('DEBUG', { info: "Move rejected: Not player's turn." });
+                return;
+            }
+
+            let move = null;
+            try {
+                move = game.move({
+                    from: source,
+                    to: target,
+                    promotion: 'q' // Automatically promote to a Queen for simplicity
+                });
+
+                if (move === null) {
+                    logDiag('DEBUG', { info: "Move rejected: Illegal move." });
+                    selectedSquare = null;
+                    applyHighlights();
+                    return;
+                }
+
+                logDiag('USER_MOVE_SUCCESS', { 
+                    move: move.san, 
+                    fen_after: game.fen(),
+                    board_view: game.ascii(),
+                    game_over_flags: getGameOverFlags()
+                });
+                
+                lastMove = { from: source, to: target }; // Store last move for highlighting
+                selectedSquare = null; // Clear selection after successful move
+                drawPieces(); // Re-draw all pieces
+                updateStatus();
+                applyHighlights();
+
+                if (!game.game_over()) {
+                    isPlayerTurn = false;
+                    window.setTimeout(makeAIMove, 250);
+                }
+
+            } catch (e) {
+                logDiag('ERROR', { 
+                    context: 'attemptMove validation', 
+                    error: e.message,
+                    source,
+                    target
+                });
+                selectedSquare = null; // Clear selection on error
+                applyHighlights();
+            }
+        }
+        
+
+        /**
+         * Calculates and performs the AI's move.
+         */
+        function makeAIMove() {
+            if (game.game_over() || isPlayerTurn) {
+                return;
+            }
+            
+            logDiag('AI_THINKING', { fen: game.fen() });
+            const startTime = performance.now();
+
+            try {
+                const bestMove = getBestMove(game);
+                let aiMove = null;
+
+                if (bestMove) {
+                    aiMove = game.move(bestMove);
+                    lastMove = { from: aiMove.from, to: aiMove.to }; // Store last move
+                }
+
+                const endTime = performance.now();
+                const calcTime = (endTime - startTime).toFixed(2);
+
+                if (aiMove) {
+                    logDiag('AI_MOVE_SUCCESS', { 
+                        move: aiMove.san, 
+                        calculation_time_ms: calcTime,
+                        fen_after: game.fen(),
+                        board_view: game.ascii(),
+                        game_over_flags: getGameOverFlags()
+                    });
+
+                    drawPieces(); // Redraw pieces for AI move
+                    updateStatus();
+                    applyHighlights(); // Apply highlights for AI's last move
+                } else {
+                     logDiag('DEBUG', { info: "AI has no moves." });
+                     updateStatus(); // Update status for stalemate/draw
+                }
+
+            } catch (e) {
+                logDiag('ERROR', { 
+                    context: 'makeAIMove execution', 
+                    error: e.message
+                });
+            }
+        }
+ 
+        // --- AI Functions ---
+        const pieceValue = {
+            'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000
+        };
+
+        const whitePawnBonus = [
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [50, 50, 50, 50, 50, 50, 50, 50], // Rank 7
+            [30, 30, 30, 30, 30, 30, 30, 30], // Rank 6
+            [20, 20, 20, 20, 20, 20, 20, 20], // Rank 5
+            [10, 10, 10, 10, 10, 10, 10, 10], // Rank 4
+            [5, 5, 5, 5, 5, 5, 5, 5],     // Rank 3
+            [0, 0, 0, 0, 0, 0, 0, 0],     // Rank 2 (start)
+            [0, 0, 0, 0, 0, 0, 0, 0]      // Rank 1
+        ];
+
+        const blackPawnBonus = whitePawnBonus.slice().reverse();
+
+        function evaluateBoard(board, playerColor) {
+            let totalEvaluation = 0;
+
+            for (let i = 0; i < 8; i++) { // row
+                for (let j = 0; j < 8; j++) { // col
+                    const piece = board[i][j];
+                    if (piece) {
+                        let value = pieceValue[piece.type];
+                        
+                        if (piece.type === 'p') {
+                            value += (piece.color === 'w') 
+                                ? whitePawnBonus[i][j] 
+                                : blackPawnBonus[i][j];
+                        }
+
+                        totalEvaluation += (piece.color === playerColor) ? value : -value;
+                    }
+                }
+            }
+            return totalEvaluation;
+        }
+
+        function getBestMove(gameInstance) {
+            if (gameInstance.game_over()) {
+                return null;
+            }
+
+            const possibleMoves = gameInstance.moves({ verbose: true });
+            if (possibleMoves.length === 0) {
+                return null; // Stalemate or Checkmate
+            }
+            
+            let bestMove = null;
+            let bestValue = -Infinity;
+            const aiColor = gameInstance.turn();
+
+            for (const move of possibleMoves) {
+                gameInstance.move(move.san);
+
+                if (gameInstance.in_checkmate()) {
+                    logDiag('AI_DECISION', { 
+                        info: "Found direct checkmate!", 
+                        bestMoveFound: move.san 
+                    });
+                    gameInstance.undo();
+                    return move;
+                }
+
+                const opponentMoves = gameInstance.moves({ verbose: true });
+                let opponentBestValue = Infinity;
+
+                if (opponentMoves.length === 0) {
+                    if (gameInstance.in_checkmate()) {
+                        opponentBestValue = -Infinity; // Opponent is checkmated, this is bad for AI
+                    } else {
+                        opponentBestValue = 0; // Stalemate
+                    }
+                } else {
+                    for (const opponentMove of opponentMoves) {
+                        gameInstance.move(opponentMove.san);
+                        const boardValue = evaluateBoard(gameInstance.board(), aiColor);
+                        if (boardValue < opponentBestValue) {
+                            opponentBestValue = boardValue;
+                        }
+                        gameInstance.undo();
+                    }
+                }
+                
+                if (opponentBestValue > bestValue) {
+                    bestValue = opponentBestValue;
+                    bestMove = move;
+                }
+
+                gameInstance.undo();
+            }
+            
+            logDiag('AI_DECISION', {
+                bestMoveFound: bestMove ? bestMove.san : "None",
+                evaluatedValue: bestValue,
+                totalMovesAnalyzed: possibleMoves.length
+            });
+
+            return bestMove;
+        }
+        
+        /**
+         * Loads a new puzzle onto the board.
+         */
+        function loadPuzzle() {
+            diagnosticLog = []; // Clear log for new puzzle
+            selectedSquare = null; // Clear selection
+            lastMove = null;       // Clear last move highlight
+            try {
+                const randomFen = puzzles[Math.floor(Math.random() * puzzles.length)];
+                game.load(randomFen);
+                drawBoard(); // Redraw entire board and pieces
+                userColor = game.turn(); // Default to side-to-move
+                isPlayerTurn = true;
+
+                logDiag('PUZZLE_LOADED', { 
+                    fen: randomFen, 
+                    default_user_color: userColor,
+                    board_view: game.ascii(),
+                    game_over_flags: getGameOverFlags()
+                });
+
+                updateStatus();
+                // Enable color selection buttons
+                $('#playWhiteButton').prop('disabled', false);
+                $('#playBlackButton').prop('disabled', false);
+            } catch (e) {
+                logDiag('ERROR', { context: 'loadPuzzle', error: e.message });
+                $('#status').text('Error loading puzzle.');
+            }
+        }
+
+        /**
+         * Sets the player's color.
+         */
+        function setPlayerColor(color) {
+            userColor = color;
+            isPlayerTurn = (game.turn() === userColor);
+            
+            logDiag('USER_COLOR_SELECT', { 
+                color, 
+                isPlayerTurn, 
+                current_turn: game.turn() 
+            });
+
+            $('#status').text(`You are playing as ${color === 'w' ? 'White' : 'Black'}.`);
+            
+            // If it's not the player's turn, trigger the AI move.
+            if (!isPlayerTurn && !game.game_over()) {
+                window.setTimeout(makeAIMove, 250);
+            }
+            drawPieces(); // Redraw pieces to update draggable class
+            applyHighlights();
+        }
+
+        /**
+         * Diagnostic Button: Copies the log to clipboard.
+         */
+        function copyDiagToClipboard() {
+            try {
+                const logString = JSON.stringify(diagnosticLog, null, 2);
+                
+                const textArea = document.createElement('textarea');
+                textArea.value = logString;
+                textArea.style.position = 'fixed'; 
+                textArea.style.opacity = 0;
+                document.body.appendChild(textArea);
+                
+                textArea.select();
+                document.execCommand('copy');
+                
+                document.body.removeChild(textArea);
+
+                logDiag('DIAG_COPIED', { log_size: logString.length });
+
+                const msg = $('#copyMessage');
+                msg.show();
+                setTimeout(() => msg.hide(), 2000);
+
+            } catch (e) {
+                logDiag('ERROR', { context: 'copyDiagToClipboard', error: e.message });
+                // Do not use alert().
+                console.error("Failed to copy diagnostics:", e);
+            }
+        }
+
+        // --- Event Listeners ---
+        $(document).ready(function() {
+            $('#newPuzzleButton').on('click', loadPuzzle);
+            $('#playWhiteButton').on('click', () => setPlayerColor('w'));
+            $('#playBlackButton').on('click', () => setPlayerColor('b'));
+            $('#diagButton').on('click', copyDiagToClipboard);
+
+            // Add click listener to the SVG board for piece selection/movement
+            document.getElementById('board-container').addEventListener('click', function(event) {
+                if (event.target && event.target.classList.contains('square')) {
+                    handleSquareClick(event);
+                } else if (event.target && event.target.classList.contains('piece')) {
+                    // If a piece is clicked directly, treat it as a square click for selection
+                    const square = event.target.dataset.square;
+                    const mockEvent = { target: document.querySelector(`.square[data-square="${square}"]`) };
+                    handleSquareClick(mockEvent);
+                }
+            });
+
+            logDiag('APP_INIT', { message: 'Trainer initialized.' });
+            loadPuzzle(); // Auto-load first puzzle
+        });
+
+    </script>
+</body>
+</html>
+
