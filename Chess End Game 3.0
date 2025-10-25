@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- VERSIONING: v3.00 -->
+    <title>Chess End Game 3.0 v3.00 (Python/Wasm)</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Pyodide (WebAssembly Python) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+    
+    <!-- jQuery (provides $) - Still used for UI convenience -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        #board-container { position: relative; width: 100%; max-width: 600px; }
+        #chess-svg { width: 100%; height: 100%; background-color: transparent; display: block; }
+        .square-light { fill: #f0d9b5; }
+        .square-dark { fill: #b58863; }
+        .piece { font-family: "Segoe UI Symbol", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", "Liberation Sans", sans-serif; font-size: 70px; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+        .piece-w { fill: #fff; stroke: #333; stroke-width: 1px; }
+        .piece-b { fill: #000; stroke: #ccc; stroke-width: 1px; }
+        .notation { font-family: 'Inter', sans-serif; font-size: 20px; fill: #999; pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+        .draggable-piece { cursor: grab; }
+        .square.selected { fill: rgba(30, 144, 255, 0.5); }
+        .square.highlight { fill: rgba(0, 255, 0, 0.3); }
+        .square.last-move-highlight { fill: rgba(255, 255, 0, 0.5); }
+        
+        /* Modal Overlays */
+        .modal-overlay { 
+            position: fixed; 
+            inset: 0; 
+            background-color: rgba(0, 0, 0, 0.75); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 1000;
+            display: none; /* Hidden by default */
+        }
+        .modal-content {
+            background-color: #2d3748; /* gray-800 */
+            padding: 2rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            color: white;
+            border: 1px solid #4a5568; /* gray-600 */
+        }
+        
+        /* Promotion Button Style */
+        .promo-btn {
+            cursor: pointer;
+            transition: transform 0.1s;
+            color: white;
+        }
+        .promo-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="modal-overlay" style="display: flex;">
+        <div class="modal-content">
+            <div class="spinner mb-4 mx-auto"></div>
+            <p class="text-xl font-medium">Loading Python Environment...</p>
+        </div>
+    </div>
+    
+    <!-- Game Over Overlay -->
+    <div id="game-over-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="winner-text" class="text-3xl font-bold mb-6">Checkmate! White wins.</h2>
+            <button id="gameOverNewPuzzle" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-200 text-lg">
+                Play New Puzzle
+            </button>
+        </div>
+    </div>
+
+    <!-- Pawn Promotion Overlay -->
+    <div id="promotion-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h2 class="text-2xl font-bold mb-4">Promote Pawn To:</h2>
+            <div class="flex justify-center gap-4">
+                <button class="promo-btn text-6xl" data-piece="q">♕</button>
+                <button class="promo-btn text-6xl" data-piece="r">♖</button>
+                <button class="promo-btn text-6xl" data-piece="b">♗</button>
+                <button class="promo-btn text-6xl" data-piece="n">♘</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full max-w-3xl flex flex-col items-center">
+        <!-- VERSIONING: v3.00 -->
+        <h1 class="text-3xl font-bold mb-4">Chess End Game 3.0 v3.00 (Python/Wasm)</h1>
+        
+        <div id="status" class="h-10 text-xl font-medium mb-2 text-center">Loading...</div>
+        <div id="board-container" class="mb-4"></div>
+
+        <div class="flex flex-wrap justify-center gap-3 mb-6">
+            <button id="newPuzzleButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-200" disabled>
+                New Puzzle
+            </button>
+            <!-- NEW: Undo Button -->
+            <button id="undoButton" class="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-200" disabled>
+                Undo Move
+            </button>
+            <button id="playWhiteButton" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg shadow-lg transition duration-200" disabled>
+                Play as White
+            </button>
+            <button id="playBlackButton" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg transition duration-200" disabled>
+                Play as Black
+            </button>
+        </div>
+
+        <button id="diagButton" class="bg-green-700 hover:bg-green-800 text-white font-medium py-2 px-4 rounded-lg text-sm transition duration-200" disabled>
+            Copy Diagnostic Log
+        </button>
+        <div id="copyMessage" class="mt-2 text-green-400 font-medium" style="display: none;">
+            Diagnostic log copied to clipboard!
+        </div>
+    </div>
+
+    <script>
+        // --- Global Variables ---
+        let pyodide = null;
+        let pythonChessModule = null; 
+        let userColor = 'w';
+        let isPlayerTurn = false;
+        let diagnosticLog = [];
+        let selectedSquare = null;
+        let lastMove = null;
+        let currentFen = ''; 
+        let promotionMove = {}; // Stores {source, target} during promotion
+
+        const unicodePieces = { 'P': '♙', 'N': '♘', 'B': '♗', 'R': '♖', 'Q': '♕', 'K': '♔', 'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛', 'k': '♚' };
+
+        // --- UPDATED Puzzle Database (v3.00) ---
+        const puzzles = [
+            '8/k7/3p4/p2P4/P3K3/8/8/8 w - - 0 1',         // King/Pawn race (Winnable for White)
+            '8/8/8/8/3k4/8/1P1P4/K7 w - - 0 1',            // Two Pawns vs King (Winnable for White)
+            '8/2p5/8/8/8/K7/k7/1R6 w - - 0 1',            // Rook vs Pawn (Winnable for White)
+            '8/8/k7/8/8/8/8/K1R5 w - - 0 1',               // Rook Mate (Winnable for White)
+            '8/8/8/8/8/8/p1k5/K7 b - - 0 1',               // King/Pawn race (Winnable for Black)
+            '8/8/8/p1k5/1p6/8/P7/K7 w - - 0 1',            // King/Pawn (More complex, White to play)
+            '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',            // Basic opposition
+            '8/5k2/8/8/8/8/R7/K7 w - - 0 1'                // Rook mate practice
+        ];
+
+        // --- Python Code (Embedded as a string) ---
+        const pythonCode = `
+import chess
+import random
+import io
+import sys
+
+board = None
+
+# --- Evaluation (Simplified) ---
+piece_value = { chess.PAWN: 100, chess.KNIGHT: 320, chess.BISHOP: 330, chess.ROOK: 500, chess.QUEEN: 900, chess.KING: 20000 }
+
+def get_pawn_bonus(square, color):
+    rank = chess.square_rank(square)
+    if color == chess.WHITE:
+        return [0, 0, 5, 10, 20, 30, 50, 0][rank]
+    else:
+        return [0, 50, 30, 20, 10, 5, 0, 0][rank]
+
+def evaluate_board(current_board):
+    if current_board.is_checkmate():
+        return -99999 if current_board.turn == chess.WHITE else 99999
+    if current_board.is_stalemate() or current_board.is_insufficient_material() or current_board.is_fifty_moves():
+        return 0 
+
+    evaluation = 0
+    for square in chess.SQUARES:
+        piece = current_board.piece_at(square)
+        if piece:
+            value = piece_value[piece.piece_type]
+            if piece.piece_type == chess.PAWN:
+                 value += get_pawn_bonus(square, piece.color)
+            evaluation += value if piece.color == chess.WHITE else -value
+    return evaluation
+
+# --- Simple Minimax AI (1-ply opponent lookahead) ---
+def get_best_move_py():
+    global board
+    if board is None or board.is_game_over():
+        return None
+
+    legal_moves = list(board.legal_moves)
+    if not legal_moves:
+        return None
+
+    best_move = None
+    ai_color = board.turn
+    
+    if ai_color == chess.WHITE:
+        best_value = -float('inf')
+        for move in legal_moves:
+            board.push(move)
+            if board.is_checkmate(): 
+                board.pop()
+                return move.uci()
+            
+            opponent_best_response_value = float('inf')
+            opponent_moves = list(board.legal_moves)
+            if not opponent_moves:
+                 if board.is_stalemate(): opponent_best_response_value = 0
+                 else: opponent_best_response_value = -float('inf') 
+            else:
+                for opp_move in opponent_moves:
+                    board.push(opp_move)
+                    board_value = evaluate_board(board)
+                    opponent_best_response_value = min(opponent_best_response_value, board_value)
+                    board.pop()
+
+            if opponent_best_response_value > best_value:
+                best_value = opponent_best_response_value
+                best_move = move
+                
+            board.pop()
+    else: # Black's turn
+        best_value = float('inf')
+        for move in legal_moves:
+            board.push(move)
+            if board.is_checkmate(): 
+                board.pop()
+                return move.uci()
+
+            opponent_best_response_value = -float('inf')
+            opponent_moves = list(board.legal_moves)
+            if not opponent_moves:
+                 if board.is_stalemate(): opponent_best_response_value = 0
+                 else: opponent_best_response_value = float('inf') 
+            else:
+                for opp_move in opponent_moves:
+                    board.push(opp_move)
+                    board_value = evaluate_board(board)
+                    opponent_best_response_value = max(opponent_best_response_value, board_value)
+                    board.pop()
+                    
+            if opponent_best_response_value < best_value:
+                best_value = opponent_best_response_value
+                best_move = move
+                
+            board.pop()
+
+    if best_move is None and legal_moves:
+        best_move = random.choice(legal_moves)
+
+    return best_move.uci() if best_move else None
+
+
+# --- Functions exposed to JavaScript ---
+
+def load_fen_py(fen_string):
+    global board
+    try:
+        board = chess.Board(fen_string)
+        return board.fen()
+    except ValueError:
+        return None 
+
+def get_fen_py():
+    return board.fen() if board else None
+
+# NEW: Undo Function
+def undo_move_py():
+    global board
+    try:
+        if board and len(board.move_stack) >= 2: # Undo both AI and player
+            board.pop()
+            board.pop()
+            return {"success": True, "fen": board.fen()}
+        elif board and len(board.move_stack) == 1: # Only one move made
+            board.pop()
+            return {"success": True, "fen": board.fen()}
+        else:
+            return {"success": False, "error": "No moves to undo"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def make_move_py(uci_move):
+    global board
+    if not board: return {"success": False, "error": "Board not initialized"}
+    try:
+        # python-chess handles UCI with promotion (e.g., 'a7a8q') automatically
+        move = chess.Move.from_uci(uci_move)
+        if move in board.legal_moves:
+            san = board.san(move)
+            board.push(move)
+            return {"success": True, "fen": board.fen(), "san": san, "is_promotion": move.promotion is not None}
+        else:
+            return {"success": False, "error": "Illegal move"}
+    except ValueError:
+         return {"success": False, "error": "Invalid UCI move format"}
+    except Exception as e:
+         return {"success": False, "error": str(e)}
+
+def get_legal_moves_py(square_name=None):
+    if not board: return []
+    moves = []
+    for move in board.legal_moves:
+        if square_name is None or chess.square_name(move.from_square) == square_name:
+             moves.append({
+                "from": chess.square_name(move.from_square), 
+                "to": chess.square_name(move.to_square), 
+                "san": board.san(move),
+                # IMPORTANT: Pass promotion piece type if it's a promotion
+                "promotion": chess.piece_symbol(move.promotion).lower() if move.promotion else None 
+             })
+    return moves 
+
+def get_board_py(): 
+    if not board: return None
+    board_repr = []
+    for r in range(8):
+        rank = []
+        for f in range(8):
+            sq = chess.square(f, 7 - r) 
+            piece = board.piece_at(sq)
+            if piece:
+                rank.append({"type": piece.symbol().lower(), "color": 'w' if piece.color == chess.WHITE else 'b'})
+            else:
+                rank.append(None)
+        board_repr.append(rank)
+    return board_repr
+
+def get_game_state_py():
+    if not board: return None
+    outcome = board.outcome()
+    termination = None
+    winner = None
+    if outcome:
+        termination = str(outcome.termination).split('.')[-1] # e.g., "CHECKMATE"
+        winner = "white" if outcome.winner == chess.WHITE else "black" if outcome.winner == chess.BLACK else "draw"
+
+    return {
+        "turn": 'w' if board.turn == chess.WHITE else 'b',
+        "is_game_over": board.is_game_over(),
+        "is_checkmate": board.is_checkmate(),
+        "is_stalemate": board.is_stalemate(),
+        "is_insufficient_material": board.is_insufficient_material(),
+        "is_seventyfive_moves": board.is_seventyfive_moves(), 
+        "is_fivefold_repetition": board.is_fivefold_repetition(), 
+        "outcome_termination": termination,
+        "outcome_winner": winner
+    }
+
+def get_ascii_py():
+    return str(board) if board else ""
+
+`;
+
+        // --- Core Functions ---
+
+        function logDiag(type, data) {
+            const timestamp = new Date().toISOString();
+            const logEntry = { timestamp, type, data };
+            diagnosticLog.push(logEntry);
+            if (type === 'ERROR') console.error('DIAGNOSTIC ERROR:', data);
+            else console.log('DIAGNOSTIC INFO:', logEntry);
+        }
+
+        async function callPython(funcName, ...args) {
+            logDiag('PYTHON_CALL', { funcName, args });
+            try {
+                if (!pythonChessModule || !pythonChessModule[funcName]) {
+                    throw new Error(`Python function ${funcName} not found.`);
+                }
+                const result = await pythonChessModule[funcName](...args);
+                const jsResult = (typeof result?.toJs === 'function') ? result.toJs({ dict_converter: Object.fromEntries }) : result;
+                logDiag('PYTHON_RETURN', { funcName, result: jsResult });
+                return jsResult;
+            } catch (error) {
+                logDiag('PYTHON_ERROR', { funcName, error: error.message, args });
+                console.error(`Python call error in ${funcName}:`, error);
+                throw error; 
+            }
+        }
+
+        async function updateStatus() {
+            let status = '';
+            try {
+                const gameState = await callPython('get_game_state_py');
+                if (!gameState) {
+                    $('#status').text('Error getting game state.');
+                    return;
+                }
+
+                let moveColor = (gameState.turn === 'w') ? 'White' : 'Black';
+
+                if (gameState.is_game_over) {
+                    isPlayerTurn = false;
+                    if (gameState.is_checkmate) {
+                        const winner = gameState.outcome_winner === 'white' ? 'White' : 'Black';
+                        $('#winner-text').text(`Checkmate! ${winner} wins.`);
+                    } else { 
+                        $('#winner-text').text('Draw!');
+                    }
+                    $('#game-over-overlay').css('display', 'flex'); 
+                } else {
+                    status = `${moveColor} to move.`;
+                    isPlayerTurn = (gameState.turn === userColor);
+                    $('#status').text(status);
+                    $('#game-over-overlay').hide(); 
+                }
+            } catch (error) {
+                $('#status').text('Error updating status.');
+            }
+        }
+
+
+        // --- SVG Board Rendering ---
+        const SQUARE_SIZE = (800 - 60) / 8; // 92.5
+        const BOARD_START = 30;
+
+        function squareToCoords(square) {
+            const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
+            const rank = 8 - parseInt(square[1]);
+            const x = BOARD_START + (file * SQUARE_SIZE) + (SQUARE_SIZE / 2);
+            const y = BOARD_START + (rank * SQUARE_SIZE) + (SQUARE_SIZE / 2);
+            return { x, y };
+        }
+
+        function drawBoard() {
+             const boardContainer = document.getElementById('board-container');
+            boardContainer.innerHTML = ''; 
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute('id', 'chess-svg');
+            svg.setAttribute('viewBox', '0 0 800 800'); 
+            boardContainer.appendChild(svg);
+
+            for (let i = 0; i < 8; i++) { 
+                for (let j = 0; j < 8; j++) { 
+                    const squareColor = (i + j) % 2 === 0 ? 'square-light' : 'square-dark';
+                    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                    const x = BOARD_START + (j * SQUARE_SIZE);
+                    const y = BOARD_START + (i * SQUARE_SIZE);
+                    rect.setAttribute('x', x);
+                    rect.setAttribute('y', y);
+                    rect.setAttribute('width', SQUARE_SIZE);
+                    rect.setAttribute('height', SQUARE_SIZE);
+                    rect.setAttribute('class', `square ${squareColor}`);
+                    rect.setAttribute('data-square', String.fromCharCode('a'.charCodeAt(0) + j) + (8 - i));
+                    svg.appendChild(rect);
+                }
+            }
+            
+            for (let i = 0; i < 8; i++) {
+                const rankText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                rankText.setAttribute('x', BOARD_START / 2 - 5); 
+                rankText.setAttribute('y', BOARD_START + (i * SQUARE_SIZE) + (SQUARE_SIZE / 2));
+                rankText.setAttribute('class', 'notation');
+                rankText.textContent = (8 - i).toString();
+                svg.appendChild(rankText);
+                
+                const fileText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                fileText.setAttribute('x', BOARD_START + (i * SQUARE_SIZE) + (SQUARE_SIZE / 2));
+                fileText.setAttribute('y', 800 - (BOARD_START / 2) + 5); 
+                fileText.setAttribute('class', 'notation');
+                fileText.textContent = String.fromCharCode('a'.charCodeAt(0) + i);
+                svg.appendChild(fileText);
+            }
+        }
+
+        async function drawPieces() {
+            document.querySelectorAll('.piece').forEach(p => p.remove());
+            try {
+                const currentBoard = await callPython('get_board_py');
+                if (!currentBoard) return;
+
+                const svg = document.getElementById('chess-svg');
+                for (let i = 0; i < 8; i++) {
+                    for (let j = 0; j < 8; j++) {
+                        const piece = currentBoard[i][j];
+                        if (piece) {
+                             const squareName = String.fromCharCode('a'.charCodeAt(0) + j) + (8 - i);
+                            const { x, y } = squareToCoords(squareName);
+                            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                            text.setAttribute('x', x);
+                            text.setAttribute('y', y);
+                            text.setAttribute('class', `piece piece-${piece.color} ${piece.color === userColor ? 'draggable-piece' : ''}`);
+                            text.setAttribute('data-piece', piece.color + piece.type.toUpperCase());
+                            text.setAttribute('data-square', squareName);
+                            
+                            if (piece.color === 'w') {
+                                text.textContent = unicodePieces[piece.type.toUpperCase()];
+                            } else {
+                                text.textContent = unicodePieces[piece.type.toLowerCase()];
+                            }
+                            svg.appendChild(text);
+                        }
+                    }
+                }
+            } catch (error) {
+                 console.error("Error drawing pieces:", error);
+            }
+        }
+        
+        async function applyHighlights() {
+             document.querySelectorAll('.square').forEach(sq => {
+                sq.classList.remove('selected', 'highlight', 'last-move-highlight');
+                sq.removeAttribute('data-is-legal-target'); 
+            });
+
+            if (selectedSquare) {
+                const selectedRect = document.querySelector(`.square[data-square="${selectedSquare}"]`);
+                if (selectedRect) selectedRect.classList.add('selected');
+
+                if (isPlayerTurn) {
+                    try {
+                        const legalMoves = await callPython('get_legal_moves_py', selectedSquare);
+                        legalMoves.forEach(move => {
+                            const targetRect = document.querySelector(`.square[data-square="${move.to}"]`);
+                            if (targetRect) {
+                                targetRect.classList.add('highlight');
+                                targetRect.setAttribute('data-is-legal-target', 'true');
+                            }
+                        });
+                    } catch(error) {
+                        console.error("Error applying highlights:", error);
+                    }
+                }
+            }
+
+            if (lastMove) {
+                const fromRect = document.querySelector(`.square[data-square="${lastMove.from}"]`);
+                const toRect = document.querySelector(`.square[data-square="${lastMove.to}"]`);
+                if (fromRect) fromRect.classList.add('last-move-highlight');
+                if (toRect) toRect.classList.add('last-move-highlight');
+            }
+        }
+        
+        // --- Event Handling ---
+        
+        async function handleSquareClick(event) {
+            const clickedSquare = event.target.dataset.square;
+            logDiag('UI_CLICK', { target: event.target.tagName, square: clickedSquare });
+
+            if (!clickedSquare) {
+                selectedSquare = null;
+                await applyHighlights();
+                return;
+            }
+
+            let pieceOnClickedSquare = null;
+            try {
+                const boardData = await callPython('get_board_py');
+                const fileIndex = clickedSquare.charCodeAt(0) - 'a'.charCodeAt(0);
+                const rankIndex = 8 - parseInt(clickedSquare[1]);
+                pieceOnClickedSquare = boardData[rankIndex][fileIndex];
+            } catch (error) {
+                console.error("Error getting piece for click:", error);
+                return; 
+            }
+
+            if (selectedSquare) {
+                const source = selectedSquare;
+                const target = clickedSquare;
+                
+                const targetRect = document.querySelector(`.square[data-square="${target}"]`);
+                if (targetRect && targetRect.getAttribute('data-is-legal-target') === 'true') {
+                    
+                    // --- PAWN PROMOTION LOGIC ---
+                    const sourcePiece = (await callPython('get_board_py'))[8 - parseInt(source[1])][source.charCodeAt(0) - 'a'.charCodeAt(0)];
+                    const isPawn = sourcePiece && sourcePiece.type === 'p';
+                    const isPromoRank = (sourcePiece.color === 'w' && target[1] === '8') || (sourcePiece.color === 'b' && target[1] === '1');
+
+                    if (isPawn && isPromoRank) {
+                        logDiag('UI_EVENT', { event: 'Promotion menu shown', source, target });
+                        promotionMove = { source, target };
+                        $('#promotion-overlay').css('display', 'flex');
+                    } else {
+                        await attemptMove(source, target, null); // Normal move
+                    }
+                    // --- END PROMOTION LOGIC ---
+
+                } else if (source === target) {
+                    selectedSquare = null;
+                } else if (pieceOnClickedSquare && pieceOnClickedSquare.color === userColor) {
+                    selectedSquare = clickedSquare;
+                } else {
+                    selectedSquare = null;
+                }
+            } else {
+                 if (pieceOnClickedSquare && pieceOnClickedSquare.color === userColor && isPlayerTurn) {
+                    selectedSquare = clickedSquare;
+                }
+            }
+            await applyHighlights(); 
+        }
+        
+        // MODIFIED: Added promotionPiece parameter
+        async function attemptMove(source, target, promotionPiece) {
+            logDiag('USER_ATTEMPT_MOVE', { source, target, promotion: promotionPiece, userColor, isPlayerTurn });
+
+            if (!isPlayerTurn) {
+                logDiag('DEBUG', { info: "Move rejected: Not player's turn." });
+                return;
+            }
+
+            let uci_move = `${source}${target}`;
+            if (promotionPiece) {
+                uci_move += promotionPiece; // Append 'q', 'r', 'b', or 'n'
+            }
+
+            try {
+                const moveResult = await callPython('make_move_py', uci_move); 
+
+                if (!moveResult || !moveResult.success) {
+                    logDiag('DEBUG', { info: `Move rejected: ${moveResult?.error || 'Unknown reason'}.` });
+                    selectedSquare = null;
+                    await applyHighlights();
+                    return;
+                }
+                
+                currentFen = moveResult.fen; 
+                const boardAscii = await callPython('get_ascii_py');
+                const gameOverFlags = await callPython('get_game_state_py');
+
+                logDiag('USER_MOVE_SUCCESS', { 
+                    move: moveResult.san, 
+                    fen_after: currentFen,
+                    board_view: boardAscii,
+                    game_over_flags: gameOverFlags 
+                });
+                
+                lastMove = { from: source, to: target };
+                selectedSquare = null;
+                await drawPieces(); 
+                await updateStatus(); 
+                await applyHighlights(); 
+
+                const currentGameState = await callPython('get_game_state_py');
+                if (!currentGameState.is_game_over) {
+                    isPlayerTurn = false; 
+                    window.setTimeout(makeAIMove, 250); 
+                }
+
+            } catch (e) {
+                const currentFenOnError = await callPython('get_fen_py'); 
+                logDiag('ERROR', { 
+                    context: 'attemptMove validation', 
+                    error: e.message, source, target,
+                    fen_before_attempt: currentFenOnError 
+                });
+                selectedSquare = null;
+                await applyHighlights();
+                await updateStatus();
+            }
+        }
+        
+
+        async function makeAIMove() {
+             let currentGameState = await callPython('get_game_state_py');
+             if (currentGameState.is_game_over || isPlayerTurn) {
+                return;
+            }
+            
+            logDiag('AI_THINKING', { fen: await callPython('get_fen_py') });
+            const startTime = performance.now();
+            let aiMoveResult = null;
+            let bestMoveUCI = null;
+
+            try {
+                bestMoveUCI = await callPython('get_best_move_py'); 
+
+                if (bestMoveUCI) {
+                     // Check for promotion in AI move (e.g., d7d8)
+                     // The python-chess move object includes promotion, so we need to check the full uci string
+                     const legalMoves = await callPython('get_legal_moves_py');
+                     const aiMoveObj = legalMoves.find(m => m.from + m.to === bestMoveUCI);
+
+                     if(aiMoveObj && aiMoveObj.promotion) {
+                         bestMoveUCI += aiMoveObj.promotion; // Add 'q', 'r', etc.
+                         logDiag('DEBUG', { info: `AI auto-promoting: ${bestMoveUCI}`});
+                     } else if (bestMoveUCI.length === 4 && (bestMoveUCI[3] === '8' || bestMoveUCI[3] === '1')) {
+                         // Fallback for simple pawn pushes that might be promotions
+                         const sourcePiece = (await callPython('get_board_py'))[8 - parseInt(bestMoveUCI[1])][bestMoveUCI.charCodeAt(0) - 'a'.charCodeAt(0)];
+                         if (sourcePiece && sourcePiece.type === 'p') {
+                             bestMoveUCI += 'q'; // Default to Queen
+                             logDiag('DEBUG', { info: `AI auto-promoting (fallback): ${bestMoveUCI}`});
+                         }
+                     }
+
+                     aiMoveResult = await callPython('make_move_py', bestMoveUCI);
+                     if (aiMoveResult && aiMoveResult.success) {
+                         currentFen = aiMoveResult.fen;
+                         lastMove = { from: bestMoveUCI.substring(0, 2), to: bestMoveUCI.substring(2, 4) };
+                     } else {
+                         logDiag('ERROR', { context: 'AI failed to make calculated move', uci: bestMoveUCI, error: aiMoveResult?.error});
+                         bestMoveUCI = null; 
+                     }
+                } else {
+                     logDiag('DEBUG', { info: "AI calculates no best move (Game over?)." });
+                }
+
+                const endTime = performance.now();
+                const calcTime = (endTime - startTime).toFixed(2);
+                const boardAscii = await callPython('get_ascii_py');
+                const gameOverFlags = await callPython('get_game_state_py');
+
+                if (bestMoveUCI && aiMoveResult && aiMoveResult.success) {
+                    logDiag('AI_MOVE_SUCCESS', { 
+                        move: aiMoveResult.san, 
+                        calculation_time_ms: calcTime,
+                        fen_after: currentFen,
+                        board_view: boardAscii,
+                        game_over_flags: gameOverFlags
+                    });
+                } else {
+                     logDiag('DEBUG', { info: "AI made no move.", game_over_flags: gameOverFlags });
+                }
+                
+                await drawPieces(); 
+                await updateStatus(); 
+                await applyHighlights();
+
+            } catch (e) {
+                 const currentFenOnError = await callPython('get_fen_py');
+                logDiag('ERROR', { 
+                    context: 'makeAIMove execution', 
+                    error: e.message,
+                    fen_before_attempt: currentFenOnError,
+                    best_move_calculated_uci: bestMoveUCI || "N/A"
+                });
+                await updateStatus();
+            }
+        }
+ 
+        
+        async function loadPuzzle() {
+            diagnosticLog = []; 
+            selectedSquare = null;
+            lastMove = null;
+            $('#status').text('Loading puzzle...');
+            $('#game-over-overlay').hide(); 
+            try {
+                const randomFen = puzzles[Math.floor(Math.random() * puzzles.length)];
+                currentFen = await callPython('load_fen_py', randomFen); 
+
+                if (!currentFen) {
+                     throw new Error("Python backend failed to load FEN.");
+                }
+
+                drawBoard(); 
+                await drawPieces(); 
+
+                const gameState = await callPython('get_game_state_py');
+                userColor = gameState.turn; 
+                isPlayerTurn = true; 
+
+                const boardAscii = await callPython('get_ascii_py');
+
+                logDiag('PUZZLE_LOADED', { 
+                    fen: currentFen, 
+                    default_user_color: userColor,
+                    board_view: boardAscii,
+                    game_over_flags: gameState 
+                });
+
+                await updateStatus();
+                $('#playWhiteButton, #playBlackButton, #newPuzzleButton, #diagButton, #undoButton').prop('disabled', false);
+
+            } catch (e) {
+                logDiag('ERROR', { context: 'loadPuzzle', error: e.message });
+                $('#status').text('Error loading puzzle.');
+                 drawBoard(); 
+            }
+        }
+
+        async function setPlayerColor(color) {
+            userColor = color;
+            const gameState = await callPython('get_game_state_py');
+            isPlayerTurn = (gameState.turn === userColor);
+            
+            logDiag('USER_COLOR_SELECT', { color, isPlayerTurn, current_turn: gameState.turn });
+            $('#status').text(`You are playing as ${color === 'w' ? 'White' : 'Black'}.`);
+            
+            if (!isPlayerTurn && !gameState.is_game_over) {
+                window.setTimeout(makeAIMove, 250);
+            }
+            await drawPieces(); 
+            await applyHighlights();
+        }
+
+        function copyDiagToClipboard() { 
+            try {
+                const logString = JSON.stringify(diagnosticLog, null, 2);
+                const textArea = document.createElement('textarea');
+                textArea.value = logString;
+                textArea.style.position = 'fixed'; 
+                textArea.style.opacity = 0;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                logDiag('DIAG_COPIED', { log_size: logString.length });
+                const msg = $('#copyMessage');
+                msg.show();
+                setTimeout(() => msg.hide(), 2000);
+            } catch (e) {
+                logDiag('ERROR', { context: 'copyDiagToClipboard', error: e.message });
+                console.error("Failed to copy diagnostics:", e);
+            }
+        }
+
+        // --- Pyodide Initialization and Main Execution ---
+        async function main() {
+            logDiag('PYODIDE_INIT', { message: 'Loading Pyodide...' });
+            $('#status').text('Loading Python...');
+            $('#loading-overlay').show(); 
+
+            try {
+                pyodide = await loadPyodide();
+                logDiag('PYODIDE_READY', { message: 'Pyodide loaded. Loading python-chess...' });
+                $('#status').text('Loading Chess Library...');
+                await pyodide.loadPackage("micropip");
+                const micropip = pyodide.pyimport("micropip");
+                await micropip.install('python-chess');
+                logDiag('PYTHON_LIB_LOADED', { message: 'python-chess installed.' });
+                
+                $('#status').text('Setting up Python environment...');
+                pyodide.runPython(pythonCode);
+                
+                pythonChessModule = {
+                    load_fen_py: pyodide.globals.get('load_fen_py'),
+                    get_fen_py: pyodide.globals.get('get_fen_py'),
+                    make_move_py: pyodide.globals.get('make_move_py'),
+                    get_legal_moves_py: pyodide.globals.get('get_legal_moves_py'),
+                    get_board_py: pyodide.globals.get('get_board_py'),
+                    get_game_state_py: pyodide.globals.get('get_game_state_py'),
+                    get_ascii_py: pyodide.globals.get('get_ascii_py'),
+                    get_best_move_py: pyodide.globals.get('get_best_move_py'),
+                    undo_move_py: pyodide.globals.get('undo_move_py') // Add Undo function
+                };
+
+                logDiag('PYTHON_CODE_EXECUTED', { message: 'Python functions are ready.' });
+
+                // Setup UI Listeners 
+                $('#newPuzzleButton').on('click', () => { logDiag('UI_EVENT', { button: 'newPuzzleButton' }); loadPuzzle(); });
+                $('#gameOverNewPuzzle').on('click', () => { logDiag('UI_EVENT', { button: 'gameOverNewPuzzle' }); loadPuzzle(); });
+                
+                $('#playWhiteButton').on('click', () => { logDiag('UI_EVENT', { button: 'playWhiteButton' }); setPlayerColor('w'); });
+                $('#playBlackButton').on('click', () => { logDiag('UI_EVENT', { button: 'playBlackButton' }); setPlayerColor('b'); });
+                $('#diagButton').on('click', () => { logDiag('UI_EVENT', { button: 'diagButton' }); copyDiagToClipboard(); });
+
+                // NEW: Undo Button Listener
+                $('#undoButton').on('click', async () => {
+                    logDiag('UI_EVENT', { button: 'undoButton' });
+                    const undoResult = await callPython('undo_move_py');
+                    if (undoResult && undoResult.success) {
+                        logDiag('UNDO_SUCCESS', { fen: undoResult.fen });
+                        await drawPieces();
+                        await updateStatus();
+                        // Set turn back to player
+                        const gameState = await callPython('get_game_state_py');
+                        userColor = gameState.turn;
+                        isPlayerTurn = true;
+                        logDiag('USER_COLOR_SELECT', { color: userColor, isPlayerTurn: true, current_turn: gameState.turn, context: "Undo" });
+                        await applyHighlights();
+                    } else {
+                        logDiag('DEBUG', { info: "Undo failed.", error: undoResult?.error });
+                    }
+                });
+
+                // NEW: Promotion Button Listeners
+                $('.promo-btn').on('click', async function() {
+                    const piece = $(this).data('piece');
+                    logDiag('UI_EVENT', { button: 'promotion', piece: piece });
+                    $('#promotion-overlay').hide();
+                    if(promotionMove.source && promotionMove.target) {
+                        await attemptMove(promotionMove.source, promotionMove.target, piece);
+                        promotionMove = {}; // Clear move cache
+                    } else {
+                        logDiag('ERROR', { context: 'Promotion click', error: 'promotionMove object was empty.'});
+                    }
+                });
+                
+                $('#board-container').on('click', function(event) { 
+                    if (event.target && event.target.classList.contains('square')) {
+                        handleSquareClick(event);
+                    } else if (event.target && event.target.classList.contains('piece')) {
+                        const square = event.target.dataset.square;
+                        const mockEvent = { target: document.querySelector(`.square[data-square="${square}"]`) };
+                        handleSquareClick(mockEvent);
+                    }
+                 });
+
+                logDiag('APP_INIT', { message: 'Trainer initialized with Python backend.' });
+                await loadPuzzle(); 
+
+            } catch (error) {
+                logDiag('FATAL_ERROR', { context: 'Pyodide Initialization', error: error.message });
+                $('#status').text('FATAL: Failed to load Python environment. Check console.');
+                console.error("Pyodide loading failed:", error);
+            } finally {
+                 $('#loading-overlay').hide(); 
+            }
+        }
+
+        main(); 
+
+    </script>
+</body>
+</html>
+
