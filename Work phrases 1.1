@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Phrase Generator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Set up custom font and theme -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Style for the "Copied!" state */
+        .copied-btn {
+            background-color: #22c55e !important; /* Tailwind's green-500 */
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen flex items-center justify-center p-4 md:p-8">
+
+    <!-- Main Container -->
+    <div class="bg-white rounded-xl shadow-2xl p-6 md:p-10 max-w-6xl w-full">
+
+        <h1 class="text-3xl md:text-4xl font-bold text-center mb-8 text-blue-700">
+            Professional Phrase Generator
+        </h1>
+        <p class="text-center text-slate-600 mb-10 max-w-2xl mx-auto">
+            Click a button to generate a professional variation of the original phrase.
+        </p>
+
+        <!-- "Generate All" Button -->
+        <div class="max-w-2xl mx-auto mb-6 flex justify-start">
+            <button id="btn-all" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition-all duration-200 text-base">
+                Generate All Four
+            </button>
+        </div>
+
+        <!-- Grid for the Four Generators -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            <!-- Generator 1: Community -->
+            <div class="bg-slate-50 p-6 rounded-lg shadow-md flex flex-col">
+                <button id="btn-1" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 rounded-lg shadow-lg transition-all duration-200 w-full text-left text-base">
+                    "We love working with the community, please reach out."
+                </button>
+                <div class="mt-4 bg-slate-200 rounded-md min-h-[10rem] p-4 flex flex-col justify-between">
+                    <p id="result-1" class="text-slate-800 font-mono text-sm h-full" aria-live="polite"></p>
+                    <button id="copy-1" class="hidden self-end bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mt-2 flex-shrink-0 transition-all" onclick="copyToClipboard('result-1', 'copy-1')">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Generator 2: Quality -->
+            <div class="bg-slate-50 p-6 rounded-lg shadow-md flex flex-col">
+                <button id="btn-2" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 rounded-lg shadow-lg transition-all duration-200 w-full text-left text-base">
+                    "We only use the highest quality products"
+                </button>
+                <div class="mt-4 bg-slate-200 rounded-md min-h-[10rem] p-4 flex flex-col justify-between">
+                    <p id="result-2" class="text-slate-800 font-mono text-sm h-full" aria-live="polite"></p>
+                    <button id="copy-2" class="hidden self-end bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mt-2 flex-shrink-0 transition-all" onclick="copyToClipboard('result-2', 'copy-2')">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Generator 3: Green -->
+            <div class="bg-slate-50 p-6 rounded-lg shadow-md flex flex-col">
+                <button id="btn-3" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 rounded-lg shadow-lg transition-all duration-200 w-full text-left text-base">
+                    "We go green where we can"
+                </button>
+                <div class="mt-4 bg-slate-200 rounded-md min-h-[10rem] p-4 flex flex-col justify-between">
+                    <p id="result-3" class="text-slate-800 font-mono text-sm h-full" aria-live="polite"></p>
+                    <button id="copy-3" class="hidden self-end bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mt-2 flex-shrink-0 transition-all" onclick="copyToClipboard('result-3', 'copy-3')">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+            <!-- Generator 4: Service -->
+            <div class="bg-slate-50 p-6 rounded-lg shadow-md flex flex-col">
+                <button id="btn-4" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-5 rounded-lg shadow-lg transition-all duration-200 w-full text-left text-base">
+                    "We specialize in personal customer service"
+                </button>
+                <div class="mt-4 bg-slate-200 rounded-md min-h-[10rem] p-4 flex flex-col justify-between">
+                    <p id="result-4" class="text-slate-800 font-mono text-sm h-full" aria-live="polite"></p>
+                    <button id="copy-4" class="hidden self-end bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mt-2 flex-shrink-0 transition-all" onclick="copyToClipboard('result-4', 'copy-4')">
+                        Copy
+                    </button>
+                </div>
+            </div>
+
+        </div> <!-- End Grid -->
+        
+        <!-- Diagnostic Button & Version -->
+        <div class="text-center mt-10">
+            <button id="diag-btn" class="text-sm text-slate-500 hover:text-blue-600 transition-all hover:underline">
+                Run Diagnostics
+            </button>
+            <p class="text-xs text-slate-400 mt-2">v1.1</p>
+        </div>
+
+    </div> <!-- End Main Container -->
+
+    <!-- Hidden textarea for copy-to-clipboard functionality -->
+    <textarea id="copy-helper" class="absolute -left-full"></textarea>
+
+    <!-- Diagnostic Modal -->
+    <div id="diag-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 transition-opacity duration-300">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 class="text-xl font-bold text-blue-700">Diagnostics Report</h2>
+                <button id="diag-close" class="text-slate-500 hover:text-slate-800 text-3xl font-light leading-none">&times;</button>
+            </div>
+            <!-- Modal Body -->
+            <div class="p-6 overflow-y-auto">
+                <pre id="diag-content" class="text-xs bg-slate-100 p-4 rounded-md whitespace-pre-wrap font-mono"></pre>
+            </div>
+            <!-- Modal Footer -->
+            <div class="p-4 border-t flex justify-between items-center bg-slate-50 rounded-b-lg">
+                <p class="text-xs text-slate-400">v1.1</p>
+                <button id="diag-copy" class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md transition-all">
+                    Copy Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Version 1.1
+
+        // --- PHRASE DATABASES ---
+
+        const phrases = {
+            community: [
+                "We value our community. Please reach out.",
+                "We're here for the community. Get in touch.",
+                "Community engagement is key. Let's connect.",
+                "We thrive on community. Please contact us.",
+                "Let's collaborate. We're open to the community.",
+                "We welcome community connections. Reach out.",
+                "We value community input. Let's talk.",
+                "Your community partnership matters. Connect.",
+                "We seek community collaboration. Get in touch.",
+                "We're listening to our community. Reach out.",
+                "Open to community partnership. Contact us.",
+                "We value community feedback. Please connect.",
+                "Let's build with the community. Get in touch.",
+                "We champion community teamwork. Reach out.",
+                "We're eager to work with you. Please connect.",
+                "Share your community ideas. We're listening.",
+                "We welcome community feedback. Get in touch.",
+                "Your perspective matters. Please contact us.",
+                "We are driven by community input. Let's talk.",
+                "We value your insights. Please get in touch.",
+                "Community ideas are welcome. Contact us today.",
+                "Let's start a community conversation. Reach out.",
+                "Join the community discussion. Contact us.",
+                "We're here to talk. Community first.",
+                "Engage with us. We value your voice.",
+                "We're open to discussion. Please connect.",
+                "We want to hear from our community. Reach out.",
+                "We're ready to listen. Get in touch.",
+                "Community dialogue is important. Contact us.",
+                "We're here for community dialogue. Reach out.",
+                "Let's discuss. We're community-focused.",
+                "We are committed to our community. Reach out.",
+                "We cherish our community. Please get in touch.",
+                "Our focus is the community. Let's connect.",
+                "We thrive on community engagement. Contact us.",
+                "We're powered by community. Get in touch.",
+                "We're dedicated to the community. Let's talk.",
+                "We're passionate about community. Reach out.",
+                "Our community is essential. Please connect.",
+                "We believe in our community. Get in touch.",
+                "We're invested in our community. Contact us.",
+                "We value community. Drop us a line.",
+                "We're community-focused. Send us a note.",
+                "Let's connect with our community.",
+                "Contact our community engagement team.",
+                "We're here for you. Please get in touch.",
+                "We welcome engagement. Contact us.",
+                "Our door is open to the community.",
+                "We are ready to connect. Reach out.",
+                "We invite community contact.",
+                "Community outreach is welcome.",
+                "We value public engagement. Get in touch.",
+                "We're open to local collaboration. Reach out.",
+                "We value our partners. Please connect.",
+                "Let's work together. Please reach out.",
+                "We're open to working together. Contact us.",
+                "We seek public partnership. Get in touch.",
+                "We value civic engagement. Let's talk.",
+                "Connect with our engagement team.",
+                "We're here to collaborate. Contact us.",
+                "We welcome public input. Reach out.",
+                "Community is key. Reach out.",
+                "We're listening. Connect with us.",
+                "Let's collaborate. Get in touch.",
+                "Value community? So do we. Let's talk.",
+                "We're here to help. Contact us.",
+                "We're open. Get in touch.",
+                "Let's build together. Reach out.",
+                "Your voice matters. Contact us.",
+                "Engage with us today.",
+                "Connect with our community team.",
+                "We prioritize community relations. Contact us.",
+                "We are open to community initiatives.",
+                "We welcome opportunities to engage.",
+                "Community partnership is our goal. Connect.",
+                "We seek to engage our community. Reach out.",
+                "Our commitment is to the community. Contact us.",
+                "We invite community feedback. Get in touch.",
+                "We are receptive to community dialogue.",
+                "We encourage community connection.",
+                "Contact us to discuss community partnership.",
+                "We value our community. We're here to listen.",
+                "Let's work together. Our team is ready.",
+                "We love community. Let's start a dialogue.",
+                "We're community-centric. Please connect.",
+                "Your ideas are welcome. Reach out to us.",
+                "We thrive on partnership. Get in touch.",
+                "Building community together. Contact us.",
+                "We are open to your suggestions. Reach out.",
+                "We value this community. Let's connect.",
+                "We're listening. Share your thoughts.",
+                "Let's connect. We're community-driven.",
+                "We're focused on community. Get in touch.",
+                "We're all about community. Reach out.",
+                "We're here to listen.",
+                "Our community is our priority. Let's talk.",
+                "We're open to your ideas. Please connect.",
+                "We welcome your voice. Get in touch.",
+                "We're here to partner with you. Contact us.",
+                "Let's build our community. Reach out."
+            ],
+            quality: [
+                "We use only premium materials.",
+                "Quality is our top priority.",
+                "We insist on the highest quality.",
+                "Our standard is excellence.",
+                "We build with superior products.",
+                "We never compromise on quality.",
+                "Only the best materials are used.",
+                "We source premium-grade products.",
+                "Our commitment is to quality.",
+                "We use top-tier components.",
+                "Quality products, guaranteed.",
+                "We stand for superior quality.",
+                "Our products are first-rate.",
+                "We select only the finest materials.",
+                "Excellence in every product we use.",
+                "Our quality standards are exacting.",
+                "We choose quality, always.",
+                "Superior products are our standard.",
+                "We are committed to premium quality.",
+                "Only top-quality materials meet our standard.",
+                "We rely on best-in-class products.",
+                "Our materials are second to none.",
+                "We accept nothing less than the best.",
+                "We're dedicated to product excellence.",
+                "Quality you can trust, materials we select.",
+                "We use exclusively high-grade products.",
+                "Our benchmark is superior quality.",
+                "We source for excellence.",
+                "We use proven, high-quality materials.",
+                "We are selective about our materials.",
+                "Our focus is on product integrity.",
+                "We believe in using the best.",
+                "Our work is built on quality products.",
+                "We ensure quality from the start.",
+                "We use only market-leading products.",
+                "We are defined by our product quality.",
+                "We use materials of the highest caliber.",
+                "We maintain the highest product standards.",
+                "Our craft demands the best materials.",
+                "We use A-grade products exclusively.",
+                "Quality is the foundation of our work.",
+                "We build to last with quality materials.",
+                "We utilize only top-shelf products.",
+                "Our promise: the highest quality materials.",
+                "We're synonymous with quality.",
+                "We use verified, high-quality products.",
+                "We don't settle for inferior products.",
+                "Our products are of the highest grade.",
+                "We choose materials with integrity.",
+                "We offer unmatched product quality.",
+                "Our inputs are always top-grade.",
+                "We value lasting quality.",
+                "We use only certified, quality products.",
+                "Our reputation is built on quality.",
+                "We prioritize product excellence.",
+                "We're committed to using the finest.",
+                "Our materials meet strict quality controls.",
+                "We use only the most reputable products.",
+                "We choose partners known for quality.",
+                "Our process begins with quality materials.",
+                "We use only premium-tier supplies.",
+                "We insist on durable, quality products.",
+                "Our standard: only the best.",
+                "We are uncompromising on material quality.",
+                "We use materials that stand the test of time.",
+                "We guarantee top-quality inputs.",
+                "Our materials are industry-best.",
+                "We select for quality and durability.",
+                "We're quality-driven in all we do.",
+                "We use products we are proud of.",
+                "Our materials are meticulously sourced.",
+                "We use only trusted, quality brands.",
+                "We're leaders in product quality.",
+                "We use only exceptional materials.",
+                "Our materials are best-in-market.",
+                "We are proponents of superior quality.",
+                "We're devoted to the best products.",
+                "We use only top-rated materials.",
+                "Our materials are of distinction.",
+                "We use only the finest components.",
+                "We use only elite-quality products.",
+                "Our products are premium, always.",
+                "We select materials for longevity.",
+                "We use only first-class materials.",
+                "We're focused on material excellence.",
+                "We use only products that meet our code.",
+                "Our materials are world-class.",
+                "We use only the best available products.",
+                "We select products for peak performance.",
+                "Our work reflects our quality materials.",
+                "We use only top-of-the-line products.",
+                "We're rigid about product quality.",
+                "We source only exceptional products.",
+                "We use only first-rate supplies.",
+                "Our standard is uncompromising quality.",
+                "We use products of the highest standard.",
+                "We're known for our quality materials.",
+                "We're committed to premium components.",
+                "We use only benchmark-quality products.",
+                "We only build with the best."
+            ],
+            green: [
+                "We prioritize eco-friendly options.",
+                "We choose sustainable practices.",
+                "We are committed to sustainability.",
+                "We make green choices where possible.",
+                "We're focused on eco-conscious solutions.",
+                "We practice sustainability where we can.",
+                "We opt for green alternatives.",
+                "We are mindful of our environmental impact.",
+                "We strive to be eco-friendly.",
+                "We're reducing our carbon footprint.",
+                "We choose sustainable options often.",
+                "We make environmentally friendly choices.",
+                "We are working towards sustainability.",
+                "We support green initiatives.",
+                "We are increasingly eco-conscious.",
+                "We're implementing green solutions.",
+                "We choose the sustainable path when able.",
+                "We're committed to greener operations.",
+                "We value sustainable practices.",
+                "We make eco-aware decisions.",
+                "We're actively going green.",
+                "We're becoming more sustainable daily.",
+                "We make green choices a priority.",
+                "We reduce, reuse, and recycle.",
+                "We're integrating sustainable habits.",
+                "We are environmentally responsible.",
+                "We take steps to protect our planet.",
+                "We are conscious of our eco-impact.",
+                "We're dedicated to greener practices.",
+                "We're pursuing sustainable solutions.",
+                "We opt for sustainability when possible.",
+                "We're making our business greener.",
+                "We are taking green steps forward.",
+                "We're on a path to sustainability.",
+                "We choose earth-friendly options.",
+                "We're actively reducing our impact.",
+                "We make sustainable choices.",
+                "We are always improving our green efforts.",
+                "We're mindful of our planet.",
+                "We seek out sustainable alternatives.",
+                "We're working to be a greener company.",
+                "We're doing our part for the environment.",
+                "We make green choices where practical.",
+                "We are conscious of our eco-footprint.",
+                "We are committed to greener methods.",
+                "We choose eco-friendly materials.",
+                "We are building a greener future.",
+                "We're taking action for sustainability.",
+                "We're focused on green operations.",
+                "We make responsible environmental choices.",
+                "We are striving for sustainability.",
+                "We're adopting greener processes.",
+                "We choose sustainability where feasible.",
+                "We're progressively eco-friendly.",
+                "We are dedicated to our planet.",
+                "We're finding ways to be greener.",
+                "We make choices for a healthier planet.",
+                "We are environmentally proactive.",
+                "We're continually improving our eco-efforts.",
+                "We're committed to our green goals.",
+                "We make efforts to be eco-conscious.",
+                "We're embracing sustainable solutions.",
+                "We are on a green journey.",
+                "We're integrating green technology.",
+                "We choose eco-wise options.",
+                "We're actively sustainable.",
+                "We are working to reduce our waste.",
+                "We're adopting eco-friendly operations.",
+                "We are environmentally mindful.",
+                "We make conscious green decisions.",
+                "We're implementing eco-friendly practices.",
+                "We're growing our green commitment.",
+                "We're dedicated to eco-friendly solutions.",
+                "We are taking steps to be sustainable.",
+                "We're making our practices greener.",
+                "We're focused on sustainable solutions.",
+                "We're investing in a greener tomorrow.",
+                "We are practical about sustainability.",
+                "We are always seeking greener ways.",
+                "We're making sustainable shifts.",
+                "We're committed to eco-responsibility.",
+                "We're minimizing our environmental impact.",
+                "We choose green when we have the choice.",
+                "We're focused on protecting our environment.",
+                "We're moving towards a greener model.",
+                "We're embracing our green responsibility.",
+                "We are advocates for sustainability.",
+                "We're making our footprint smaller.",
+                "We believe in sustainable business.",
+                "We're committed to reducing our impact.",
+                "We're finding sustainable efficiencies.",
+                "We're making responsible green choices.",
+                "We're actively pursuing eco-friendly paths.",
+                "We are becoming more eco-aware.",
+                "We are always learning to be greener.",
+                "We're focused on greener outcomes.",
+                "We choose sustainable partners.",
+                "We're building greener habits.",
+                "We prioritize our planet's health.",
+                "We are making strides in sustainability."
+            ],
+            service: [
+                "We specialize in personal service.",
+                "Personalized service is our specialty.",
+                "We offer dedicated, personal support.",
+                "We provide one-on-one customer care.",
+                "Our focus is personal customer service.",
+                "We excel at personalized client care.",
+                "We're experts in personal service.",
+                "We offer a tailored service experience.",
+                "Our specialty: bespoke customer care.",
+                "We pride ourselves on personal attention.",
+                "We provide concierge-level service.",
+                "We are dedicated to your personal needs.",
+                "We focus on individual client service.",
+                "You get our undivided attention.",
+                "We offer personal, dedicated support.",
+                "We build personal client relationships.",
+                "We're known for our personal touch.",
+                "Our service is tailored to you.",
+                "We provide high-touch customer care.",
+                "We offer a boutique service experience.",
+                "We are your personal service partners.",
+                "We give every client personal attention.",
+                "We specialize in knowing our customers.",
+                "Our service is built around you.",
+                "We provide individual, focused service.",
+                "We're committed to personal client care.",
+                "We offer a uniquely personal service.",
+                "We're focused on your individual needs.",
+                "We deliver white-glove service.",
+                "We believe in personal connections.",
+                "Our strength is personal support.",
+                "We master the art of personal service.",
+                "We offer a bespoke support model.",
+                "We're dedicated to personalized care.",
+                "We are your personal support specialists.",
+                "We provide attentive, personal service.",
+                "We champion the personal service approach.",
+                "Our service is anything but standard.",
+                "We are specialists in client-centric care.",
+                "We offer truly personal interactions.",
+                "We customize our service for you.",
+                "We're your dedicated service team.",
+                "We focus on personal, not automated, care.",
+                "We provide personal care, every time.",
+                "We are defined by our personal service.",
+                "We go beyond with personal attention.",
+                "We offer a custom-fit service.",
+                "We know our clients by name.",
+                "We provide relationship-based service.",
+                "We offer a human-centric service model.",
+                "We are your personal service experts.",
+                "We offer an unmatched personal service.",
+                "We're dedicated to your individual success.",
+                "We provide personal, tailored solutions.",
+                "We believe in high-touch, personal care.",
+                "We offer personal, hands-on support.",
+                "We provide a customized service journey.",
+                "We are your partner in personal service.",
+                "We're committed to one-on-one support.",
+                "We offer an intimate service experience.",
+                "We specialize in personal client focus.",
+                "We deliver a uniquely tailored service.",
+                "We're focused on you, our client.",
+                "We provide dedicated, personal advocacy.",
+                "We offer a truly bespoke service.",
+                "We're your personal point of contact.",
+                "We offer individualized customer care.",
+                "We're your partners, not just providers.",
+                "We value every client interaction.",
+                "We offer a highly personalized approach.",
+                "We are service-focused, client-centered.",
+                "We specialize in client-first service.",
+                "We provide a tailored, premium service.",
+                "We're dedicated to knowing you better.",
+                "We offer a fully personalized service.",
+                "We are specialists in tailored support.",
+                "We're focused on personal engagement.",
+                "We provide service as unique as you are.",
+                "We offer a personal, responsive service.",
+                "We are experts in customized care.",
+                "We're committed to your personal journey.",
+                "We provide an attentive, bespoke service.",
+                "We're known for our one-on-one approach.",
+                "We offer a personal, curated experience.",
+                "We're focused on personal client outcomes.",
+                "We provide a deeply personal service.",
+                "We're your personal service professionals.",
+                "We offer a service that's all about you.",
+                "We're experts in personal relations.",
+                "We provide a hands-on, personal service.",
+                "We offer service with a personal guarantee.",
+                "We are leaders in personal client management.",
+                "We provide a first-name-basis service.",
+                "We offer dedicated, bespoke support.",
+                "We are your personal success team.",
+                "We're known for our personal commitment.",
+                "We offer a personal and proactive service.",
+                "We provide an exclusive, personal service.",
+                "We are focused on personal client goals.",
+                "We specialize in people-first service."
+            ]
+        };
+
+        // --- DIAGNOSTICS STATE ---
+        const diagnostics = {
+            generatorClicks: { community: 0, quality: 0, green: 0, service: 0 },
+            generateAllClicks: 0,
+            copyClicks: { community: 0, quality: 0, green: 0, service: 0 },
+            lastGenerated: { community: 'N/A', quality: 'N/A', green: 'N/A', service: 'N/A' },
+            reportGeneratedAt: null,
+            userAgent: navigator.userAgent,
+            viewport: `${window.innerWidth}x${window.innerHeight}`
+        };
+
+        /**
+         * Generates a random phrase and displays it.
+         * @param {string} phraseKey - The key for the phrases array (e.g., 'community').
+         * @param {string} resultId - The ID of the <p> element to display the result.
+         * @param {string} copyBtnId - The ID of the <button> element to show.
+         */
+        function generatePhrase(phraseKey, resultId, copyBtnId) {
+            const phraseList = phrases[phraseKey];
+            if (!phraseList) return;
+
+            const randomIndex = Math.floor(Math.random() * phraseList.length);
+            const randomPhrase = phraseList[randomIndex];
+
+            // Update diagnostics
+            diagnostics.generatorClicks[phraseKey]++;
+            diagnostics.lastGenerated[phraseKey] = randomPhrase;
+
+            document.getElementById(resultId).innerText = randomPhrase;
+            
+            const copyButton = document.getElementById(copyBtnId);
+            copyButton.style.display = 'block';
+            copyButton.innerText = 'Copy';
+            copyButton.classList.remove('copied-btn');
+        }
+
+        /**
+         * Copies text from a result element to the clipboard.
+         * @param {string} resultId - The ID of the <p> element containing the text.
+         * @param {string} copyBtnId - The ID of the copy button that was clicked.
+         */
+        function copyToClipboard(resultId, copyBtnId) {
+            const textToCopy = document.getElementById(resultId).innerText;
+            const copyHelper = document.getElementById('copy-helper');
+
+            // Update diagnostics
+            const keyMap = {'copy-1': 'community', 'copy-2': 'quality', 'copy-3': 'green', 'copy-4': 'service'};
+            const phraseKey = keyMap[copyBtnId];
+            if (phraseKey) {
+                diagnostics.copyClicks[phraseKey]++;
+            }
+            
+            copyHelper.value = textToCopy;
+            copyHelper.select();
+            copyHelper.setSelectionRange(0, 99999); // For mobile devices
+
+            try {
+                document.execCommand('copy');
+                
+                // Visual feedback
+                const copyButton = document.getElementById(copyBtnId);
+                copyButton.innerText = 'Copied!';
+                copyButton.classList.add('copied-btn');
+                
+                setTimeout(() => {
+                    copyButton.innerText = 'Copy';
+                    copyButton.classList.remove('copied-btn');
+                }, 2000);
+
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+
+        /**
+         * Generates a new phrase for all four categories.
+         */
+        function generateAllPhrases() {
+            diagnostics.generateAllClicks++;
+            generatePhrase('community', 'result-1', 'copy-1');
+            generatePhrase('quality', 'result-2', 'copy-2');
+            generatePhrase('green', 'result-3', 'copy-3');
+            generatePhrase('service', 'result-4', 'copy-4');
+        }
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('btn-all').addEventListener('click', generateAllPhrases);
+
+        document.getElementById('btn-1').addEventListener('click', () => {
+            generatePhrase('community', 'result-1', 'copy-1');
+        });
+
+        document.getElementById('btn-2').addEventListener('click', () => {
+            generatePhrase('quality', 'result-2', 'copy-2');
+        });
+
+        document.getElementById('btn-3').addEventListener('click', () => {
+            generatePhrase('green', 'result-3', 'copy-3');
+        });
+
+        // --- SYNTAX ERROR FIX ---
+        // The 'D' was removed from this line
+        document.getElementById('btn-4').addEventListener('click', () => {
+            generatePhrase('service', 'result-4', 'copy-4');
+        });
+
+        // --- DIAGNOSTICS MODAL ---
+        const diagBtn = document.getElementById('diag-btn');
+        const diagModal = document.getElementById('diag-modal');
+        const diagClose = document.getElementById('diag-close');
+        const diagContent = document.getElementById('diag-content');
+        const diagCopy = document.getElementById('diag-copy');
+
+        diagBtn.addEventListener('click', () => {
+            // Update diagnostics report time and viewport
+            diagnostics.reportGeneratedAt = new Date().toISOString();
+            diagnostics.viewport = `${window.innerWidth}x${window.innerHeight}`;
+            
+            // Populate and show the modal
+            diagContent.textContent = JSON.stringify(diagnostics, null, 2);
+            diagModal.classList.remove('hidden');
+        });
+
+        diagClose.addEventListener('click', () => {
+            diagModal.classList.add('hidden');
+        });
+
+        // Close modal if clicking on the background overlay
+        diagModal.addEventListener('click', (e) => {
+            if (e.target === diagModal) {
+                diagModal.classList.add('hidden');
+            }
+        });
+
+        diagCopy.addEventListener('click', () => {
+            const textToCopy = diagContent.textContent;
+            const copyHelper = document.getElementById('copy-helper');
+            
+            copyHelper.value = textToCopy;
+            copyHelper.select();
+            copyHelper.setSelectionRange(0, 99999);
+
+            try {
+                document.execCommand('copy');
+                diagCopy.innerText = 'Copied!';
+                diagCopy.classList.add('copied-btn');
+                setTimeout(() => {
+                    diagCopy.innerText = 'Copy Report';
+                    diagCopy.classList.remove('copied-btn');
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy diagnostics: ', err);
+            }
+        });
+
+    </script>
+</body>
+</html>
+
+
